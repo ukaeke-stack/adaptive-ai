@@ -1,8 +1,8 @@
 # Adaptive AI
 
-A staged, safety-first personal AI assistant project. The repository contains a FastAPI backend, an allowlisted calculator tool, automated tests, an optional OpenAI-compatible chat provider adapter, SQLite-backed conversation history, and a production bearer-token guard.
+A staged, safety-first personal AI assistant project. The repository contains a FastAPI backend, an allowlisted calculator tool, automated tests, a Groq chat provider adapter, SQLite-backed conversation history, and a production bearer-token guard.
 
-The chat API is not usable until a provider API key and model are configured. Android automation and safe plugin generation are not implemented yet.
+The chat API requires a Groq API key configured privately on the server. Android automation and safe plugin generation are not implemented yet.
 
 ## Run locally
 ```bash
@@ -15,16 +15,18 @@ uvicorn app.main:app --reload
 ```
 Open `/docs` for the API explorer and `/health` for the health check.
 
-## Configure chat provider
-Set these in your local shell or private deployment settings:
-- `AI_API_KEY`: provider API key; keep secret.
-- `AI_MODEL`: model identifier supported by your provider.
-- `AI_BASE_URL`: optional OpenAI-compatible API base URL; defaults to `https://api.openai.com/v1`.
+## Configure Groq
+Create a Groq API key in the [Groq Console](https://console.groq.com/keys). Store it only in your private local environment or your hosting provider's secret settings as `GROQ_API_KEY`. **Never paste it into source files, commit it to GitHub, or share it in chat.**
 
-Never commit real API keys. The server returns a configuration error if the key or model is missing. Provider errors are returned without exposing credentials or raw provider responses.
+Supported environment settings:
+- `GROQ_API_KEY`: required secret.
+- `GROQ_MODEL`: optional; defaults to `openai/gpt-oss-20b`.
+- `GROQ_BASE_URL`: optional; defaults to `https://api.groq.com/openai/v1`. The adapter accepts only the official Groq HTTPS API host.
+
+The adapter uses Groq's OpenAI-compatible chat-completions endpoint. It sends the system instruction, the current message, and up to 20 prior user/assistant messages. The provider's raw errors and credentials are not returned to API clients. Tests mock the provider request; they do not need a real API key or make paid model calls.
 
 ## Conversation memory
-Conversations are stored in SQLite. Set `ADAPTIVE_AI_DB_PATH` to choose the database file location; the default is `adaptive_ai.sqlite3` in the backend working directory. Keep this file on persistent storage for a hosted deployment and protect backups because it contains conversation text. Endpoints let the client create/list conversations, read message history, and delete a conversation. Chat requests can include `conversation_id` to continue a thread; omit it to start a new one. The model receives up to the 20 most recent prior messages.
+Conversations are stored in SQLite. Set `ADAPTIVE_AI_DB_PATH` to choose the database file location; the default is `adaptive_ai.sqlite3` in the backend working directory. Keep this file on persistent storage for a hosted deployment and protect backups because it contains conversation text. Endpoints let the client create/list conversations, read message history, and delete a conversation. Chat requests can include `conversation_id` to continue a thread; omit it to start a new one.
 
 ## Production API protection
 When `APP_ENV=production`, every `/v1/*` route requires `Authorization: Bearer <ADAPTIVE_AI_API_TOKEN>`. Configure `ADAPTIVE_AI_API_TOKEN` as a long, random secret in the hosting provider's secret settings. If it is missing, API routes fail closed. `/health` remains public for health checks.
@@ -54,8 +56,8 @@ pytest -q
 
 ## Roadmap
 1. Service skeleton, calculator allowlist, and tests.
-2. Chat provider adapter and bounded chat endpoint (requires provider credentials).
+2. Groq chat provider adapter and bounded chat endpoint (implemented; requires a privately configured Groq API key).
 3. SQLite conversation history (implemented for single-user MVP); then user-controlled long-term memory and stronger account authentication.
 4. Sandboxed plugin generation, validation, staged activation, and rollback.
 5. Limited Android-native integrations with user-granted permissions.
-6. Deployment hardening, monitoring, backups, and recovery.
+6. Deployment hardening, monitoring, backups, rate limiting, and recovery.

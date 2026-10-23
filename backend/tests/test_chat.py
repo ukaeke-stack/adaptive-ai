@@ -23,11 +23,15 @@ def test_chat_returns_provider_reply_and_saves_history(monkeypatch, tmp_path):
 def test_chat_reuses_existing_conversation_and_history(monkeypatch, tmp_path):
     monkeypatch.setenv("ADAPTIVE_AI_DB_PATH", str(tmp_path / "chat.db"))
     calls = []
-    monkeypatch.setattr(chat_module, "generate_reply", lambda message, history=None: calls.append(history) or "Second reply")
+    monkeypatch.setattr(chat_module, "generate_reply", lambda message, history=None: calls.append(history) or f"Reply to {message}")
     first = client.post("/v1/chat", json={"message": "First"}).json()
     second = client.post("/v1/chat", json={"message": "Second", "conversation_id": first["conversation_id"]})
     assert second.status_code == 200
-    assert calls[0] == [{"role": "user", "content": "First"}, {"role": "assistant", "content": "Echo: First"}] if False else calls[0] == [{"role": "user", "content": "First"}, {"role": "assistant", "content": "Echo: First"}]
+    assert calls[0] == []
+    assert calls[1] == [
+        {"role": "user", "content": "First"},
+        {"role": "assistant", "content": "Reply to First"},
+    ]
 
 
 def test_chat_rejects_empty_message():

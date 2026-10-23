@@ -1,0 +1,56 @@
+from fastapi.testclient import TestClient
+from app.main import app
+
+client = TestClient(app)
+
+
+def test_health_returns_ok():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "service": "adaptive-ai-backend",
+        "milestone": "1",
+    }
+
+
+def test_capabilities_only_lists_calculator():
+    response = client.get("/v1/capabilities")
+    assert response.status_code == 200
+    assert response.json()["capabilities"][0]["name"] == "calculator"
+
+
+def test_calculator_adds_numbers():
+    response = client.post("/v1/tools/execute", json={
+        "name": "calculator", "arguments": {"operation": "add", "a": 2, "b": 3}
+    })
+    assert response.status_code == 200
+    assert response.json()["result"] == 5.0
+
+
+def test_unknown_tool_is_rejected():
+    response = client.post("/v1/tools/execute", json={
+        "name": "run_python", "arguments": {"code": "print('unsafe')"}
+    })
+    assert response.status_code == 404
+
+
+def test_division_by_zero_is_rejected():
+    response = client.post("/v1/tools/execute", json={
+        "name": "calculator", "arguments": {"operation": "divide", "a": 10, "b": 0}
+    })
+    assert response.status_code == 422
+
+
+def test_unsupported_operation_is_rejected():
+    response = client.post("/v1/tools/execute", json={
+        "name": "calculator", "arguments": {"operation": "power", "a": 2, "b": 8}
+    })
+    assert response.status_code == 422
+
+
+def test_wrong_argument_shape_is_rejected():
+    response = client.post("/v1/tools/execute", json={
+        "name": "calculator", "arguments": {"operation": "add", "a": 1}
+    })
+    assert response.status_code == 422

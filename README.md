@@ -1,8 +1,8 @@
 # Adaptive AI
 
-A staged, safety-first personal AI assistant project. The repository contains a FastAPI backend, an allowlisted calculator tool, automated tests, an optional OpenAI-compatible chat provider adapter, and a production bearer-token guard.
+A staged, safety-first personal AI assistant project. The repository contains a FastAPI backend, an allowlisted calculator tool, automated tests, an optional OpenAI-compatible chat provider adapter, SQLite-backed conversation history, and a production bearer-token guard.
 
-The chat API is not usable until a provider API key and model are configured. Android automation, persistent memory, and safe plugin generation are not implemented yet.
+The chat API is not usable until a provider API key and model are configured. Android automation and safe plugin generation are not implemented yet.
 
 ## Run locally
 ```bash
@@ -23,16 +23,23 @@ Set these in your local shell or private deployment settings:
 
 Never commit real API keys. The server returns a configuration error if the key or model is missing. Provider errors are returned without exposing credentials or raw provider responses.
 
+## Conversation memory
+Conversations are stored in SQLite. Set `ADAPTIVE_AI_DB_PATH` to choose the database file location; the default is `adaptive_ai.sqlite3` in the backend working directory. Keep this file on persistent storage for a hosted deployment and protect backups because it contains conversation text. Endpoints let the client create/list conversations, read message history, and delete a conversation. Chat requests can include `conversation_id` to continue a thread; omit it to start a new one. The model receives up to the 20 most recent prior messages.
+
 ## Production API protection
 When `APP_ENV=production`, every `/v1/*` route requires `Authorization: Bearer <ADAPTIVE_AI_API_TOKEN>`. Configure `ADAPTIVE_AI_API_TOKEN` as a long, random secret in the hosting provider's secret settings. If it is missing, API routes fail closed. `/health` remains public for health checks.
 
-This is a starter single-token guard, not full user authentication. **Rate limiting, account-level identity, conversation storage, and production abuse controls are still pending. Do not expose this prototype publicly until those controls are implemented.**
+This is a starter single-token guard, not full user authentication. **Rate limiting, account-level identity, and production abuse controls are still pending. Do not expose this prototype publicly until those controls are implemented.**
 
 ## API endpoints
 - `GET /health` — health check.
 - `GET /v1/capabilities` — registered tools.
 - `POST /v1/tools/execute` — allowlisted calculator only.
-- `POST /v1/chat` — sends one message to the configured chat-completions provider. Request body: `{"message":"Hello"}`.
+- `POST /v1/chat` — request body `{"message":"Hello"}`; optionally include `conversation_id` to continue a conversation.
+- `POST /v1/conversations` — create a conversation.
+- `GET /v1/conversations` — list recent conversations.
+- `GET /v1/conversations/{id}/messages` — read messages.
+- `DELETE /v1/conversations/{id}` — delete a conversation and its messages.
 
 ## Run tests
 ```bash
@@ -47,8 +54,8 @@ pytest -q
 
 ## Roadmap
 1. Service skeleton, calculator allowlist, and tests.
-2. Chat provider adapter and bounded chat endpoint (scaffolded; requires provider credentials).
-3. Authentication hardening, request limits, and user-controlled persistent memory.
+2. Chat provider adapter and bounded chat endpoint (requires provider credentials).
+3. SQLite conversation history (implemented for single-user MVP); then user-controlled long-term memory and stronger account authentication.
 4. Sandboxed plugin generation, validation, staged activation, and rollback.
 5. Limited Android-native integrations with user-granted permissions.
 6. Deployment hardening, monitoring, backups, and recovery.

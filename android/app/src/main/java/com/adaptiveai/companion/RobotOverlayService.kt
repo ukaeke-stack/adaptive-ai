@@ -48,6 +48,7 @@ class RobotOverlayService : Service() {
     private var touchStartX = 0
     private var touchStartY = 0
     private var dragged = false
+    private var pendingListenOnOpen = false
 
     private val step = object : Runnable {
         override fun run() {
@@ -130,7 +131,7 @@ class RobotOverlayService : Service() {
                 MotionEvent.ACTION_UP -> {
                     if (!dragged) {
                         view.performClick()
-                        if (panel == null) showChatPanel() else hideChatPanel()
+                        if (panel == null) showChatPanel(startListening = true) else startPanelListening()
                     }
                     true
                 }
@@ -141,7 +142,8 @@ class RobotOverlayService : Service() {
         handler.post(step)
     }
 
-    private fun showChatPanel() {
+    private fun showChatPanel(startListening: Boolean = false) {
+        pendingListenOnOpen = startListening
         if (panel != null) return
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
@@ -157,7 +159,7 @@ class RobotOverlayService : Service() {
             setBackgroundColor(Color.rgb(18, 37, 59))
         }
         val title = TextView(this).apply {
-            text = "Adaptive AI"
+            text = "Norah"
             textSize = 16f
             setTextColor(Color.WHITE)
         }
@@ -167,16 +169,22 @@ class RobotOverlayService : Service() {
         }
         header.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(close)
-        speechBridge = AndroidSpeechBridge(this)
         val miniWeb = WebView(this).apply {
             settings.javaScriptEnabled = true
-            addJavascriptInterface(speechBridge!!, "AdaptiveNative")
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             settings.allowContentAccess = true
             settings.allowFileAccess = false
             CookieManager.getInstance().setAcceptCookie(true)
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    if (pendingListenOnOpen) {
+                        pendingListenOnOpen = false
+                        view?.evaluateJavascript("window.NorahStartListening && window.NorahStartListening()", null)
+                    }
+                }
+            }
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest) {
                     handler.post {
@@ -194,6 +202,10 @@ class RobotOverlayService : Service() {
                 }
             }
             loadUrl("https://adaptive-ai-huve.onrender.com/app/")
+        }
+        speechBridge = AndroidSpeechBridge(this).also { bridge ->
+            bridge.attachWebView(miniWeb)
+            miniWeb.addJavascriptInterface(bridge, "AdaptiveNative")
         }
         root.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(miniWeb, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -218,7 +230,13 @@ class RobotOverlayService : Service() {
         }
     }
 
+    private fun startPanelListening() {
+        val web = panel?.getChildAt(1) as? WebView ?: return
+        web.evaluateJavascript("window.NorahStartListening && window.NorahStartListening()", null)
+    }
+
     private fun hideChatPanel() {
+        pendingListenOnOpen = false
         val p = panel
         if (p != null) {
             try { (p.getChildAt(1) as? WebView)?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() }; wm.removeView(p) } catch (_: Exception) {}
@@ -250,7 +268,7 @@ class RobotOverlayService : Service() {
         return if (Build.VERSION.SDK_INT >= 26)
             Notification.Builder(this, "adaptive_robot")
                 .setContentTitle("Adaptive AI robot is active")
-                .setContentText("Tap the walking robot to open or hide floating chat.")
+                .setContentText("Tap the walking robot to talk to Norah. Use Hide to close floating chat.")
                 .setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(open).setOngoing(true).build()
         else Notification.Builder(this).setContentTitle("Adaptive AI robot is active")
             .setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(open).build()

@@ -66,6 +66,10 @@ def _ensure_schema(engine: Engine) -> None:
             )
         """))
         connection.execute(text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS adaptive_one_owner
+            ON adaptive_users(role) WHERE role = 'owner'
+        """))
+        connection.execute(text("""
             CREATE TABLE IF NOT EXISTS adaptive_sessions (
                 token_hash TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL REFERENCES adaptive_users(id) ON DELETE CASCADE,

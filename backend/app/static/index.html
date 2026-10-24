@@ -65,7 +65,7 @@ input,textarea,button{font:inherit}input,textarea{background:#091629;border:1px 
 const $ = id => document.getElementById(id);
 const panel=$('robotPanel'), stateLabel=$('stateLabel'), stateDetail=$('stateDetail'), log=$('chatLog'), input=$('messageInput'), errorText=$('errorText'), sendButton=$('sendButton'), micButton=$('micButton'), connectionLabel=$('connectionLabel');
 let conversationId=null, busy=false, voiceReplies=true, recognition=null, listening=false, voiceTranscript="", cancelVoiceAutoSend=false, authenticated=false, handsFreeEnabled=false, voicePauseTimer=null;
-function setState(state,label,detail){panel.dataset.state=state;stateLabel.textContent=label;stateDetail.textContent=detail;const fc=$('floatingCompanion');if(fc){fc.classList.toggle('thinking',state==='thinking');fc.classList.toggle('speaking',state==='speaking');fc.classList.toggle('talking',state==='speaking');fc.classList.toggle('moving',state==='listening'||state==='idle');$('fcCaption').textContent=state==='speaking'?'Speaking…':state==='thinking'?'Thinking…':state==='listening'?'Listening…':'Norah'}}
+function setState(state,label,detail){panel.dataset.state=state;stateLabel.textContent=label;stateDetail.textContent=detail}
 function addBubble(role,text){
  const empty=$('emptyState'); if(empty) empty.remove();
  const b=document.createElement('div');b.className='bubble '+role;

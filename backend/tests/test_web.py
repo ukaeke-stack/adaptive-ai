@@ -54,3 +54,13 @@ def test_account_forms_include_owner_enrollment_and_recovery():
     assert "/v1/auth/login" in response.text
     assert "/v1/auth/recover" in response.text
     assert "ADAPTIVE_AI_API_TOKEN" not in response.text
+
+
+def test_floating_robot_refreshes_authentication_before_listening_and_sending():
+    response = client.get("/app/?overlay=1")
+    assert response.status_code == 200
+    page = response.text
+    assert "await checkSession();" in page
+    assert "async function activateFloatingRobot()" in page
+    assert "The floating WebView can start before the main app's login completes." in page
+    assert "await checkSession();\n if(!authenticated){const message='Please sign in to Adaptive AI in the main app, then tap Norah again.'" in page

@@ -70,6 +70,11 @@ def _ready_engine() -> Engine:
     return engine
 
 
+def initialize_store() -> None:
+    """Connect to the configured database and ensure storage tables exist."""
+    _ready_engine()
+
+
 def create_conversation() -> dict:
     now = datetime.now(timezone.utc).isoformat()
     conversation_id = str(uuid4())
@@ -110,7 +115,7 @@ def add_message(conversation_id: str, role: str, content: str) -> None:
         connection.execute(text(
             "UPDATE conversations SET updated_at = :updated_at WHERE id = :id"
         ), {"updated_at": now, "id": conversation_id})
-
+        
 
 def get_messages(conversation_id: str, limit: int = 20) -> list[dict]:
     limit = max(1, min(int(limit), 100))

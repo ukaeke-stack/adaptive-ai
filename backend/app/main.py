@@ -31,7 +31,7 @@ app.mount("/app", StaticFiles(directory=str(_STATIC_DIR), html=True), name="adap
 
 
 def custom_openapi():
-    """Expose the middleware's bearer-token requirement in Swagger UI."""
+    """Expose the protected API authentication requirement in Swagger UI."""
     if app.openapi_schema:
         return app.openapi_schema
     schema = get_openapi(
@@ -44,7 +44,7 @@ def custom_openapi():
         "BearerAuth"
     ] = {"type": "http", "scheme": "bearer", "bearerFormat": "token"}
     for path, path_item in schema.get("paths", {}).items():
-        if path.startswith("/v1/"):
+        if path.startswith("/v1/") and not path.startswith("/v1/auth/"):
             for operation in path_item.values():
                 if isinstance(operation, dict) and "responses" in operation:
                     operation["security"] = [{"BearerAuth": []}]

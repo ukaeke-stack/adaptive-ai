@@ -170,8 +170,8 @@ class RobotOverlayService : Service() {
             setPadding(12, 8, 12, 8)
             setLineSpacing(1f, 1.08f)
         }
-        scroll.addView(reply, ScrollView.LayoutParams(
-            ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
+        scroll.addView(reply, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ))
 
         val miniWeb = WebView(this).apply {

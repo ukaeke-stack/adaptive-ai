@@ -24,6 +24,7 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
     @Volatile private var webView: WebView? = null
     private var recognizer: SpeechRecognizer? = null
     @Volatile private var listening = false
+    @Volatile var overlayTextListener: ((String) -> Unit)? = null
     private lateinit var engine: TextToSpeech
 
     init {
@@ -87,6 +88,13 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Microphone is busy. Wait a moment and tap again."
         SpeechRecognizer.ERROR_SERVER -> "Android speech recognition is temporarily unavailable."
         else -> "Voice input failed (error $error). Tap the microphone and try again."
+    }
+
+    @JavascriptInterface
+    fun showOverlayText(text: String?) {
+        val safe = text?.take(12000)?.trim().orEmpty()
+        if (safe.isEmpty()) return
+        mainHandler.post { overlayTextListener?.invoke(safe) }
     }
 
     @JavascriptInterface
@@ -189,5 +197,6 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
             initializationComplete = true
         }
         webView = null
+        overlayTextListener = null
     }
 }

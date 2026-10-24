@@ -166,6 +166,8 @@ function showOverlayResponse(text){const native=window.AdaptiveNative;if(native&
 async function sendMessage(raw){
  const message=raw.trim();if(!message||busy)return;
  errorText.textContent='';
+ // Refresh authentication immediately before submitting typed or recognized speech.
+ await checkSession();
  if(!authenticated){errorText.textContent='Sign in before sending a message.';return}
  addBubble('user',message);input.value='';setBusy(true);connectionLabel.textContent='Sending securely to Norah…';
  try{
@@ -213,7 +215,13 @@ window.NorahNativeVoice={
  onError:message=>{nativeListening=false;micButton.classList.remove('active');micButton.textContent='🎙';errorText.textContent=message||'Voice input failed.';setState('error','Microphone unavailable',message||'Tap the microphone and try again.');if(overlayMode)showOverlayResponse(message||'Microphone unavailable. Tap Norah to try again.')},
  onStopped:()=>{nativeListening=false;micButton.classList.remove('active');micButton.textContent='🎙';setState('idle','Ready when you are','Listening stopped. Tap the microphone to speak again.')}
 };
-function activateFloatingRobot(){
+async function activateFloatingRobot(){
+ // The overlay can outlive the page state that first detected the login.
+ await checkSession();
+ if(!authenticated){
+  const message='Please sign in to Adaptive AI in the main app, then tap Norah again.';
+  errorText.textContent=message;setState('idle','Sign in to chat',message);showOverlayResponse(message);return
+ }
  const native=window.AdaptiveNative;
  if(native&&typeof native.startListening==='function'){
   if(nativeListening){native.stopListening();return}

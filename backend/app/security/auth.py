@@ -12,6 +12,7 @@ import time
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from app.security.sessions import current_user
 
 _RATE_WINDOW_SECONDS = 60.0
 _RATE_LIMIT = 60
@@ -57,21 +58,25 @@ async def protect_api_routes(request: Request, call_next):
     is_api = request.url.path.startswith("/v1/")
     app_env = os.getenv("APP_ENV", "production").strip().lower()
 
-    if is_api and app_env == "production":
-        expected = os.getenv("ADAPTIVE_AI_API_TOKEN", "").strip()
-        if not expected:
-            return _security_headers(JSONResponse(
-                status_code=503,
-                content={"detail": "API access token is not configured"},
-            ))
+    is_auth_endpoint = request.url.path.startswith("/v1/auth/")
+    if is_api and app_env == "production" and not is_auth_endpoint:
+        # Browser users authenticate with an HTTP-only server-managed session.
+        # Keep bearer-token access for existing controlled API clients during migration.
+        session_user = current_user(request)
         authorization = request.headers.get("authorization", "")
         scheme, _, supplied = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not supplied or not hmac.compare_digest(supplied, expected):
+        expected = os.getenv("ADAPTIVE_AI_API_TOKEN", "").strip()
+        bearer_valid = bool(expected and scheme.lower() == "bearer" and supplied and hmac.compare_digest(supplied, expected))
+        if not session_user and not bearer_valid:
             return _security_headers(JSONResponse(
                 status_code=401,
-                content={"detail": "Valid bearer token required"},
+                content={"detail": "Please sign in to Adaptive AI."},
                 headers={"WWW-Authenticate": "Bearer"},
             ))
+        if session_user and request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin")
+            if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
+                return _security_headers(JSONResponse(status_code=403, content={"detail": "Cross-origin request blocked."}))
 
         raw_length = request.headers.get("content-length")
         if raw_length:

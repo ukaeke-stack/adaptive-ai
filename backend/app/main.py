@@ -1,5 +1,7 @@
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
 from app.api.health import router as health_router
 from app.api.capabilities import router as capabilities_router
 from app.api.chat import router as chat_router
@@ -19,6 +21,11 @@ app.include_router(health_router)
 app.include_router(capabilities_router)
 app.include_router(chat_router)
 app.include_router(conversations_router)
+
+# Serve the same-origin web interface. API secrets remain server-side; the UI
+# asks the controlled tester to enter the API bearer token without saving it.
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/app", StaticFiles(directory=str(_STATIC_DIR), html=True), name="adaptive-ai-web")
 
 
 def custom_openapi():
@@ -60,5 +67,6 @@ def service_info():
         "status": "online",
         "health": "/health",
         "docs": "/docs",
+        "app": "/app/",
         "api_authentication_required": settings.app_env == "production",
     }

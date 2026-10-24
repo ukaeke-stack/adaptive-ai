@@ -69,6 +69,28 @@ input,textarea,button{font:inherit}input,textarea{background:#091629;border:1px 
 </section>
 </main>
 </div>
+
+<div class="vision-modal" id="visionModal" hidden role="dialog" aria-modal="true" aria-labelledby="visionTitle">
+ <section class="vision-card">
+  <div class="vision-head"><h2 id="visionTitle">Adaptive AI camera eyes</h2><button class="ghost" id="visionClose" type="button">Close</button></div>
+  <p class="vision-note">Capture an image or choose a photo. Adaptive AI can describe objects and scenes, read visible text, and describe non-identifying visual details.</p>
+  <video id="visionVideo" class="vision-preview" autoplay playsinline muted></video>
+  <img id="visionImagePreview" class="vision-preview" alt="Image selected for analysis" hidden>
+  <canvas id="visionCanvas" hidden></canvas>
+  <div class="vision-controls">
+   <button id="visionStart" class="ghost" type="button">Start camera</button>
+   <button id="visionSwitch" class="ghost" type="button">Switch front/back</button>
+   <button id="visionCapture" type="button" disabled>Capture image</button>
+   <label class="ghost" for="visionFile" style="display:inline-block;padding:9px 12px;border-radius:12px;cursor:pointer">Choose image</label>
+   <input id="visionFile" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style="max-width:190px">
+  </div>
+  <label for="visionPrompt">What should Adaptive AI look for?</label>
+  <textarea id="visionPrompt">Describe this image and transcribe any readable text.</textarea>
+  <div class="vision-controls"><button id="visionAnalyze" type="button" disabled>Analyze image</button></div>
+  <p id="visionStatus" class="vision-result" role="status"></p>
+ </section>
+</div>
+
 <script>
 (() => {
 const $ = id => document.getElementById(id);
@@ -137,7 +159,8 @@ $('voiceToggle').addEventListener('click',()=>{voiceReplies=!voiceReplies;$('voi
 $('stopVoice').addEventListener('click',()=>{if('speechSynthesis'in window)window.speechSynthesis.cancel();if(recognition&&listening){cancelVoiceAutoSend=true;voiceTranscript='';recognition.stop()}setState('idle','Ready when you are','Voice playback or listening stopped.')});
 const floatToggle=$('floatToggle'),floatingCompanion=$('floatingCompanion');let floatEnabled=true,floatX=8,floatY=Math.round(window.innerHeight*.38),floatDirection=1,dragging=false,dragStart=null;
 function placeFloatingRobot(){if(!floatEnabled||dragging)return;const maxX=Math.max(0,window.innerWidth-105),maxY=Math.max(20,window.innerHeight-205);floatX+=floatDirection*.65;if(floatX>=maxX){floatX=maxX;floatDirection=-1}if(floatX<=0){floatX=0;floatDirection=1}floatY=Math.max(12,Math.min(maxY,floatY));floatingCompanion.style.left=floatX+'px';floatingCompanion.style.top=floatY+'px';requestAnimationFrame(placeFloatingRobot)}
-requestAnimationFrame(placeFloatingRobot);\nfloatToggle.addEventListener('click',()=>{floatEnabled=!floatEnabled;floatingCompanion.classList.toggle('visible',floatEnabled);floatToggle.textContent='Floating robot: '+(floatEnabled?'on':'off');if(floatEnabled){floatX=Math.min(floatX,Math.max(0,window.innerWidth-105));requestAnimationFrame(placeFloatingRobot)}});
+requestAnimationFrame(placeFloatingRobot);
+floatToggle.addEventListener('click',()=>{floatEnabled=!floatEnabled;floatingCompanion.classList.toggle('visible',floatEnabled);floatToggle.textContent='Floating robot: '+(floatEnabled?'on':'off');if(floatEnabled){floatX=Math.min(floatX,Math.max(0,window.innerWidth-105));requestAnimationFrame(placeFloatingRobot)}});
 floatingCompanion.addEventListener('pointerdown',e=>{dragging=true;dragStart={x:e.clientX-floatX,y:e.clientY-floatY};floatingCompanion.setPointerCapture(e.pointerId)});
 floatingCompanion.addEventListener('pointermove',e=>{if(!dragging||!dragStart)return;floatX=Math.max(0,Math.min(window.innerWidth-105,e.clientX-dragStart.x));floatY=Math.max(0,Math.min(window.innerHeight-205,e.clientY-dragStart.y));floatingCompanion.style.left=floatX+'px';floatingCompanion.style.top=floatY+'px'});
 floatingCompanion.addEventListener('pointerup',()=>{dragging=false;dragStart=null});
@@ -169,7 +192,8 @@ $('visionCapture').addEventListener('click',()=>{if(!visionStream||!visionVideo.
 $('visionFile').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(!file.type.startsWith('image/')){visionStatus.textContent='Choose an image file.';return}if(file.size>6*1024*1024){visionStatus.textContent='Choose an image smaller than 6 MB.';return}try{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file)});setVisionImage(String(data))}catch(err){visionStatus.textContent='Could not read that image.'}});
 $('visionAnalyze').addEventListener('click',async()=>{if(!visionDataUrl)return;if(!authenticated){visionStatus.textContent='Sign in before analyzing images.';return}$('visionAnalyze').disabled=true;visionStatus.textContent='Adaptive AI is examining the image…';setState('thinking','Examining image…','Reading visual details and interpreting your request.');try{const response=await fetch('/v1/vision/analyze',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_data_url:visionDataUrl,prompt:$('visionPrompt').value.trim()||'Describe this image and transcribe readable text.'})});const data=await response.json().catch(()=>({detail:'The server returned an unreadable response.'}));if(!response.ok)throw new Error(data.detail||'Image analysis failed.');addBubble('user','[Image submitted for visual analysis]');addBubble('assistant',data.analysis);connectionLabel.textContent='Image analyzed · '+(data.model||'vision model');if(voiceReplies&&'speechSynthesis'in window)speakReply(data.analysis);visionStatus.textContent='Analysis complete. You can capture or choose another image.'}catch(e){visionStatus.textContent=e.message||'Image analysis failed.';errorText.textContent=visionStatus.textContent}finally{$('visionAnalyze').disabled=!visionDataUrl;if(panel.dataset.state==='thinking')setState('idle','Ready when you are','Image analysis finished.')}});
 window.addEventListener('pagehide',stopVisionCamera);
-\nif(!('speechSynthesis'in window)){$('voiceToggle').disabled=true;$('voiceToggle').textContent='Voice replies unsupported'}
+
+if(!('speechSynthesis'in window)){$('voiceToggle').disabled=true;$('voiceToggle').textContent='Voice replies unsupported'}
 })();
 </script>
 </body>

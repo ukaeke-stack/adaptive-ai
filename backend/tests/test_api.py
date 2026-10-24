@@ -94,3 +94,26 @@ def test_omitted_app_env_defaults_to_production(monkeypatch):
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.setenv("ADAPTIVE_AI_API_TOKEN", "test-secret-token")
     assert client.get("/v1/capabilities").status_code == 401
+
+
+
+def test_conversation_memory_round_trip_uses_local_sqlite_in_tests(monkeypatch, tmp_path):
+    from app.memory import store
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("ADAPTIVE_AI_DB_PATH", str(tmp_path / "test-memory.sqlite3"))
+    store._engine.cache_clear()
+    try:
+        conversation = store.create_conversation()
+        assert store.conversation_exists(conversation["id"])
+        store.add_message(conversation["id"], "user", "hello")
+        store.add_message(conversation["id"], "assistant", "world")
+        assert store.get_messages(conversation["id"]) == [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "world"},
+        ]
+        assert any(item["id"] == conversation["id"] for item in store.list_conversations())
+        assert store.delete_conversation(conversation["id"])
+        assert not store.conversation_exists(conversation["id"])
+    finally:
+        store._engine.cache_clear()

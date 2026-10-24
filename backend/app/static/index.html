@@ -127,7 +127,34 @@ function addContextVisual(parent,text){
 }
 function chooseNaturalVoice(){if(!('speechSynthesis'in window))return null;const voices=window.speechSynthesis.getVoices()||[];const english=voices.filter(v=>/^en(-|$)/i.test(v.lang));return english.find(v=>/neural|natural|premium|enhanced/i.test(v.name))||english.find(v=>/google|microsoft|aria|jenny|guy|samantha|daniel/i.test(v.name))||english.find(v=>/^en-NG/i.test(v.lang))||english[0]||null}
 function resumeHandsFree(){if(!handsFreeEnabled||!recognition||busy||listening||document.hidden||('speechSynthesis'in window&&window.speechSynthesis.speaking))return;setTimeout(()=>{if(!handsFreeEnabled||busy||listening||document.hidden||('speechSynthesis'in window&&window.speechSynthesis.speaking))return;try{recognition.start()}catch(e){}},500)}
-function speakReply(text){if(!voiceReplies){resumeHandsFree();return}const chunks=String(text).match(/[^.!?]+[.!?]+|[^.!?]+$/g)||[String(text)];const native=window.AdaptiveNative;if(native&&typeof native.speak==='function'){setState('speaking','Speaking…','Reading the answer aloud using Android text-to-speech.');try{native.stop();native.speak(chunks.join(' '));setTimeout(()=>{setState('idle','Ready when you are','Audio reply finished.');resumeHandsFree()},Math.min(90000,Math.max(2500,String(text).length*75)))}catch(e){setState('error','Audio playback failed','Check Android text-to-speech settings and media volume.')}return}if(!('speechSynthesis'in window)){setState('error','Audio unavailable','Enable Android text-to-speech or check browser support.');return}window.speechSynthesis.cancel();window.speechSynthesis.resume();let i=0;const next=()=>{if(i>=chunks.length){setState('idle','Listening for you…','Continue speaking naturally. Tap Stop voice to end the session.');resumeHandsFree();return}const u=new SpeechSynthesisUtterance(chunks[i++].trim());u.lang='en-NG';u.rate=1;u.pitch=1.02;u.volume=1;const v=chooseNaturalVoice();if(v){u.voice=v;u.lang=v.lang||'en-NG'}u.onstart=()=>setState('speaking','Speaking…','Reading the answer aloud.');u.onend=next;u.onerror=()=>{if(i<chunks.length)next();else setState('idle','Ready when you are','Audio playback failed. Check media volume and browser sound settings.')};window.speechSynthesis.speak(u)};next()}
+function speakReply(text){
+ if(!voiceReplies){resumeHandsFree();return}
+ const chunks=String(text).match(/[^.!?]+[.!?]+|[^.!?]+$/g)||[String(text)];
+ const native=window.AdaptiveNative;
+ if(native&&typeof native.speak==='function'){
+  try{
+   if(typeof native.stop==='function')native.stop();
+   const accepted=native.speak(chunks.join(' '));
+   if(accepted!==false){
+    setState('speaking','Speaking…','Reading the answer aloud using Android text-to-speech.');
+    setTimeout(()=>{setState('idle','Ready when you are','Audio reply finished.');resumeHandsFree()},Math.min(90000,Math.max(2500,String(text).length*75)));
+    return;
+   }
+  }catch(e){}
+ }
+ if(!('speechSynthesis'in window)){setState('error','Audio unavailable','Android speech was unavailable and browser speech is not supported. Check Android text-to-speech settings.');return}
+ window.speechSynthesis.cancel();window.speechSynthesis.resume();let i=0;
+ const next=()=>{
+  if(i>=chunks.length){setState('idle','Ready when you are','Audio reply finished.');resumeHandsFree();return}
+  const u=new SpeechSynthesisUtterance(chunks[i++].trim());u.lang='en-US';u.rate=1;u.pitch=1.02;u.volume=1;
+  const v=chooseNaturalVoice();if(v){u.voice=v;u.lang=v.lang||'en-US'}
+  u.onstart=()=>setState('speaking','Speaking…','Reading the answer aloud.');
+  u.onend=next;
+  u.onerror=()=>{if(i<chunks.length)next();else setState('error','Audio playback failed','Check Android text-to-speech settings and media volume.')};
+  window.speechSynthesis.speak(u)
+ };
+ next()
+}
 if('speechSynthesis'in window){window.speechSynthesis.getVoices();window.speechSynthesis.onvoiceschanged=()=>window.speechSynthesis.getVoices()}
 function setBusy(v){busy=v;sendButton.disabled=v;input.disabled=v;setState(v?'thinking':'idle',v?'Thinking…':'Ready when you are',v?'Working on your message.':'Type a message or use your microphone to speak.')}
 async function sendMessage(raw){

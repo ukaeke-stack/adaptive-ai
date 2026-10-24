@@ -25,7 +25,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF07111F.toInt()) }
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(10, 8, 10, 8) }
-        val title = TextView(this).apply { text = "Adaptive AI"; textSize = 18f; setTextColor(0xFFFFFFFF.toInt()) }
+        val title = TextView(this).apply { text = "Norah"; textSize = 18f; setTextColor(0xFFFFFFFF.toInt()) }
         val overlay = Button(this).apply { text = "Enable roaming robot"; setOnClickListener { enableOverlay() } }
         bar.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(overlay)
@@ -55,10 +55,15 @@ class MainActivity : Activity() {
             }
             loadUrl("https://adaptive-ai-huve.onrender.com/app/")
         }
+        speechBridge.attachWebView(web)
         root.addView(bar)
         root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
-        if (Settings.canDrawOverlays(this)) startRobotService()
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 903)
+        } else if (Settings.canDrawOverlays(this)) {
+            startRobotService()
+        }
     }
     private fun startRobotService() {
         val intent = Intent(this, RobotOverlayService::class.java)

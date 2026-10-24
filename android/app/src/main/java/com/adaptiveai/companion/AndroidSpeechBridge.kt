@@ -159,7 +159,10 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
                         }
                         override fun onPartialResults(partialResults: Bundle?) {
                             val spoken = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
-                            if (spoken.isNotEmpty()) notifyPage("onPartial", spoken)
+                            if (spoken.isNotEmpty()) {
+                                overlayTextListener?.invoke("Hearing: $spoken")
+                                notifyPage("onPartial", spoken)
+                            }
                         }
                         override fun onEvent(eventType: Int, params: Bundle?) {}
                     })

@@ -83,11 +83,11 @@ def test_production_api_requires_bearer_token(monkeypatch):
     assert response.status_code == 200
 
 
-def test_production_api_fails_closed_when_token_missing(monkeypatch):
+def test_production_api_requires_a_session_or_valid_bearer_token(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.delenv("ADAPTIVE_AI_API_TOKEN", raising=False)
     response = client.get("/v1/capabilities")
-    assert response.status_code == 503
+    assert response.status_code == 401
 
 
 def test_omitted_app_env_defaults_to_production(monkeypatch):

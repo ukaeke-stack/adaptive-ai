@@ -5,18 +5,25 @@ from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
 from app.config import get_settings
 from app.security.auth import protect_api_routes
+from app.memory.store import initialize_store
 
 settings = get_settings()
 app = FastAPI(
     title="Adaptive AI API",
     version="0.3.0",
-    description="Milestone 3 foundation: bounded chat, SQLite conversation memory, and a production bearer-token guard. Rate limiting and multi-user accounts are still pending.",
+    description="Milestone 3 foundation: bounded Groq chat, PostgreSQL conversation memory, and a production bearer-token guard. Rate limiting and multi-user accounts are still pending.",
 )
 app.middleware("http")(protect_api_routes)
 app.include_router(health_router)
 app.include_router(capabilities_router)
 app.include_router(chat_router)
 app.include_router(conversations_router)
+
+
+@app.on_event("startup")
+def initialize_persistent_storage() -> None:
+    """Fail startup if the configured database is unavailable; ensure schema exists."""
+    initialize_store()
 
 
 @app.get("/")

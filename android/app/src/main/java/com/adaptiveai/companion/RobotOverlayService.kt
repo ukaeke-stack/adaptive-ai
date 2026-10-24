@@ -37,6 +37,7 @@ class RobotOverlayService : Service() {
     private var robotParams: WindowManager.LayoutParams? = null
     private var panel: LinearLayout? = null
     private var panelParams: WindowManager.LayoutParams? = null
+    private var speechBridge: AndroidSpeechBridge? = null
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0
     private var y = 0
@@ -166,8 +167,10 @@ class RobotOverlayService : Service() {
         }
         header.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(close)
+        speechBridge = AndroidSpeechBridge(this)
         val miniWeb = WebView(this).apply {
             settings.javaScriptEnabled = true
+            addJavascriptInterface(speechBridge!!, "AdaptiveNative")
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             settings.allowContentAccess = true
@@ -218,7 +221,9 @@ class RobotOverlayService : Service() {
     private fun hideChatPanel() {
         val p = panel
         if (p != null) {
-            try { (p.getChildAt(1) as? WebView)?.apply { stopLoading(); destroy() }; wm.removeView(p) } catch (_: Exception) {}
+            try { (p.getChildAt(1) as? WebView)?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() }; wm.removeView(p) } catch (_: Exception) {}
+            speechBridge?.close()
+            speechBridge = null
         }
         panel = null
         panelParams = null

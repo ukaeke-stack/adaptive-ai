@@ -29,6 +29,7 @@ class RobotOverlayService : Service() {
     private var params: WindowManager.LayoutParams? = null
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0; private var direction = 1
+    private var touchRawX = 0f; private var touchRawY = 0f; private var touchStartX = 0; private var touchStartY = 0; private var dragged = false
     private val step = object : Runnable {
         override fun run() {
             val p = params; val v = robot
@@ -51,12 +52,11 @@ class RobotOverlayService : Service() {
         val v = WalkingRobotView(this)
         robot = v
         params = WindowManager.LayoutParams(116, 190, type, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START; x = 0; y = resources.displayMetrics.heightPixels / 3 }
-        v.setOnClickListener { val i = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP); startActivity(i) }
         v.setOnTouchListener { view, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> { view.tag = floatArrayOf(event.rawX - (params?.x ?: 0), event.rawY - (params?.y ?: 0)); true }
-                MotionEvent.ACTION_MOVE -> { val d = view.tag as? FloatArray; val p = params; if (d != null && p != null) { p.x = (event.rawX - d[0]).toInt(); p.y = (event.rawY - d[1]).toInt(); x = p.x; try { wm.updateViewLayout(view, p) } catch (_: Exception) {} }; true }
-                MotionEvent.ACTION_UP -> { if (kotlin.math.abs(event.rawX - event.downTime.toFloat()) < -1f) performClick(); true }
+                MotionEvent.ACTION_DOWN -> { touchRawX = event.rawX; touchRawY = event.rawY; touchStartX = params?.x ?: 0; touchStartY = params?.y ?: 0; dragged = false; true }
+                MotionEvent.ACTION_MOVE -> { val dx = event.rawX - touchRawX; val dy = event.rawY - touchRawY; if (kotlin.math.abs(dx) > 8 || kotlin.math.abs(dy) > 8) dragged = true; if (dragged) { val p = params; if (p != null) { p.x = (touchStartX + dx).toInt(); p.y = (touchStartY + dy).toInt(); x = p.x; try { wm.updateViewLayout(view, p) } catch (_: Exception) {} } }; true }
+                MotionEvent.ACTION_UP -> { if (!dragged) { view.performClick(); val i = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP); startActivity(i) }; true }
                 else -> true
             }
         }

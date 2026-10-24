@@ -20,6 +20,7 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private var pendingMediaPermission: android.webkit.PermissionRequest? = null
+    private lateinit var speechBridge: AndroidSpeechBridge
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF07111F.toInt()) }
@@ -28,8 +29,10 @@ class MainActivity : Activity() {
         val overlay = Button(this).apply { text = "Enable roaming robot"; setOnClickListener { enableOverlay() } }
         bar.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(overlay)
+        speechBridge = AndroidSpeechBridge(this)
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
+            addJavascriptInterface(speechBridge, "AdaptiveNative")
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = WebViewClient()
@@ -88,6 +91,11 @@ class MainActivity : Activity() {
             }
             if (allowed) request?.grant(request.resources) else request?.deny()
         }
+    }
+    override fun onDestroy() {
+        if (::speechBridge.isInitialized) speechBridge.close()
+        if (::web.isInitialized) { web.stopLoading(); web.destroy() }
+        super.onDestroy()
     }
     override fun onBackPressed() {
         if (::web.isInitialized && web.canGoBack()) web.goBack() else super.onBackPressed()

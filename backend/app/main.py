@@ -17,3 +17,15 @@ app.include_router(health_router)
 app.include_router(capabilities_router)
 app.include_router(chat_router)
 app.include_router(conversations_router)
+
+
+@app.get("/")
+def service_info():
+    """Return a small public service landing response; protected API routes remain under /v1."""
+    return {
+        "service": "Adaptive AI API",
+        "status": "online",
+        "health": "/health",
+        "docs": "/docs",
+        "api_authentication_required": settings.app_env == "production",
+    }

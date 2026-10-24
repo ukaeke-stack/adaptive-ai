@@ -33,7 +33,7 @@ Endpoints let the client create/list conversations, read message history, and de
 ## Production API protection
 Production is the safe default when `APP_ENV` is omitted. When `APP_ENV=production`, every `/v1/*` route requires `Authorization: Bearer <ADAPTIVE_AI_API_TOKEN>`. Configure `ADAPTIVE_AI_API_TOKEN` as a long, random secret in the hosting provider's secret settings. If it is missing, API routes fail closed with HTTP 503. Invalid or absent bearer tokens receive HTTP 401. `/health` and the service landing page remain public.
 
-This is a starter single-token guard, not full user authentication. **Rate limiting, account-level identity, and production abuse controls are still pending. Do not treat this prototype as a finished public multi-user service.**
+This remains a controlled single-user deployment, not a public multi-user service. The API applies a shared bearer-token check, a basic in-process limit of 60 authenticated API requests per client per minute, a 64 KiB declared-body limit, and baseline security headers. The in-process limiter is not distributed across instances and depends on the client address exposed by the hosting proxy. **Account-level identity, per-user conversation ownership, a distributed edge rate limiter, monitoring/alerts, and recovery/backup drills remain pending. Do not distribute the shared token or advertise this version as safe for public multi-user use.**
 
 ## API endpoints
 - `GET /health` — health check.
@@ -62,4 +62,4 @@ pytest -q
 3. SQLite/PostgreSQL conversation storage; hosted PostgreSQL must be configured for durable history.
 4. Sandboxed plugin generation, validation, staged activation, and rollback.
 5. Limited Android-native integrations with user-granted permissions.
-6. Deployment hardening, monitoring, backups, rate limiting, and recovery.
+6. Account-level identity and conversation ownership, distributed rate limiting, monitoring, backups, and recovery.

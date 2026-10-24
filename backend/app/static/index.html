@@ -141,7 +141,7 @@ async function sendMessage(raw){
   if(!response.ok){let msg=data.detail||('Request failed ('+response.status+').');if(response.status===401)msg='Your session has expired or you are not signed in. Sign in again.';if(response.status===503)msg='The account service or AI provider is not configured. Check service settings.';throw new Error(msg)}
   if(typeof data.reply!=='string'||!data.reply.trim())throw new Error('The API returned no assistant reply.');
   conversationId=data.conversation_id||conversationId;addBubble('assistant',data.reply);connectionLabel.textContent='Connected · conversation active';
-  if(voiceReplies&&'speechSynthesis'in window){speakReply(data.reply)}
+  if(voiceReplies&&(('speechSynthesis'in window)||(window.AdaptiveNative&&typeof window.AdaptiveNative.speak==='function'))){speakReply(data.reply)}
  }catch(e){errorText.textContent=e.message||'Unable to reach Adaptive AI.';connectionLabel.textContent='Connection needs attention';setState('error','Could not complete request','Check your connection, then try again.')}
  finally{setBusy(false);if('speechSynthesis' in window&&window.speechSynthesis.speaking&&voiceReplies)setState('speaking','Speaking…','Reading the answer aloud.');input.focus()}
 }

@@ -26,6 +26,7 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
     private var recognizer: SpeechRecognizer? = null
     @Volatile private var listening = false
     @Volatile var overlayTextListener: ((String) -> Unit)? = null
+    @Volatile var overlayListeningListener: (() -> Unit)? = null
     @Volatile var overlayTextProgressListener: ((Float) -> Unit)? = null
     @Volatile private var speakingLength = 1
     private lateinit var engine: TextToSpeech
@@ -118,6 +119,7 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
             return false
         }
         mainHandler.post {
+            overlayListeningListener?.invoke()
             try {
                 if (listening) recognizer?.cancel()
                 if (recognizer == null) {
@@ -215,5 +217,6 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
         webView = null
         overlayTextListener = null
         overlayTextProgressListener = null
+        overlayListeningListener = null
     }
 }

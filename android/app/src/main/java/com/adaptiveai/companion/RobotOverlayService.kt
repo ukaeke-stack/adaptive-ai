@@ -213,6 +213,15 @@ class RobotOverlayService : Service() {
         }
         speechBridge = AndroidSpeechBridge(this).also { bridge ->
             bridge.attachWebView(miniWeb)
+            bridge.overlayTextProgressListener = { progress ->
+                responseScroll?.post {
+                    val scrollView = responseScroll
+                    if (scrollView != null && scrollView.childCount > 0) {
+                        val range = (scrollView.getChildAt(0).height - scrollView.height).coerceAtLeast(0)
+                        scrollView.scrollTo(0, (range * progress).toInt())
+                    }
+                }
+            }
             bridge.overlayTextListener = { text ->
                 reply.text = text
                 root.visibility = View.VISIBLE

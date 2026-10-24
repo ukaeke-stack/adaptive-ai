@@ -58,7 +58,7 @@ pytest -q
 
 ## Roadmap
 1. Service skeleton, calculator allowlist, and tests.
-2. Groq chat provider adapter and bounded chat endpoint (implemented; live provider connectivity must be verified on the deployed service).
+2. Groq chat provider adapter and bounded chat endpoint (implemented; deployed chat returned HTTP 200 and persisted its user/assistant messages on 2026-10-24; re-verify after provider or credential changes).
 3. SQLite/PostgreSQL conversation storage; hosted PostgreSQL must be configured for durable history.
 4. Sandboxed plugin generation, validation, staged activation, and rollback.
 5. Limited Android-native integrations with user-granted permissions.

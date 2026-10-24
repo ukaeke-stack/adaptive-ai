@@ -35,12 +35,12 @@ _SYSTEM_PROMPT = (
 )
 
 _AUDIO_CHECK = re.compile(
-    r"^\\s*(?:(?:hey\\s+)?(?:can|could)\\s+you\\s+)?(?:hear\\s+me|hear\\s+that|hear\\s+my\\s+voice)"
-    r"[?!.,\\s]*$|^\\s*(?:can|could)\\s+you\\s+hear\\s+(?:me|this|my\\s+voice)[?!.,\\s]*$",
+    r"^\s*(?:(?:hey\s+)?(?:can|could)\s+you\s+)?(?:hear\s+me|hear\s+that|hear\s+my\s+voice)"
+    r"[?!.,\s]*$|^\s*(?:can|could)\s+you\s+hear\s+(?:me|this|my\s+voice)[?!.,\s]*$",
     re.IGNORECASE,
 )
 _STALE_AUDIO_DISCLAIMER = re.compile(
-    r"(?:don't|do not|cannot|can't)\\s+(?:directly\\s+)?hear audio|"
+    r"(?:don't|do not|cannot|can't)\s+(?:directly\s+)?hear audio|"
     r"only (?:read|receive) text|only text|don't have the ability to hear audio",
     re.IGNORECASE,
 )

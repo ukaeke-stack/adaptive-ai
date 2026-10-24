@@ -55,8 +55,8 @@ def test_production_api_rejects_oversized_declared_body(monkeypatch):
     _production(monkeypatch)
     response = client.post(
         "/v1/chat",
-        headers={"Authorization": "Bearer test-secret-token", "Content-Length": str(65 * 1024)},
-        content=b"",
+        headers={"Authorization": "Bearer test-secret-token", "Content-Length": str(11 * 1024 * 1024)},
+        content=b"x" * (11 * 1024 * 1024),
     )
     assert response.status_code == 413
 

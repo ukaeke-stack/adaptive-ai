@@ -37,6 +37,7 @@ class RobotOverlayService : Service() {
     private var robotParams: WindowManager.LayoutParams? = null
     private var panel: LinearLayout? = null
     private var panelParams: WindowManager.LayoutParams? = null
+    private var speechBridge: AndroidSpeechBridge? = null
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0
     private var y = 0
@@ -166,8 +167,10 @@ class RobotOverlayService : Service() {
         }
         header.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(close)
+        speechBridge = AndroidSpeechBridge(this)
         val miniWeb = WebView(this).apply {
             settings.javaScriptEnabled = true
+            addJavascriptInterface(speechBridge!!, "AdaptiveNative")
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             settings.allowContentAccess = true
@@ -218,7 +221,9 @@ class RobotOverlayService : Service() {
     private fun hideChatPanel() {
         val p = panel
         if (p != null) {
-            try { (p.getChildAt(1) as? WebView)?.apply { stopLoading(); destroy() }; wm.removeView(p) } catch (_: Exception) {}
+            try { (p.getChildAt(1) as? WebView)?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() }; wm.removeView(p) } catch (_: Exception) {}
+            speechBridge?.close()
+            speechBridge = null
         }
         panel = null
         panelParams = null
@@ -264,28 +269,37 @@ private class WalkingRobotView(context: android.content.Context) : View(context)
         val c = canvas
         val cx = width / 2f
         val swing = kotlin.math.sin(walkPhase.toDouble()).toFloat() * 13f
+        val wave = if (walkPhase % 9f > 6f) 22f else 0f
         c.save()
         if (!facingRight) c.scale(-1f, 1f, cx, height / 2f)
         paint(Color.argb(25, 97, 230, 239)); c.drawOval(RectF(8f, 12f, width - 8f, height - 5f), p)
+        c.save()
+        c.rotate(kotlin.math.sin((walkPhase * .35f).toDouble()).toFloat() * 4f, cx, 44f)
         paint(Color.rgb(97, 230, 239), Paint.Style.STROKE, 3f); c.drawLine(cx, 13f, cx, 23f, p)
         paint(Color.rgb(97, 230, 239)); c.drawCircle(cx, 10f, 5f, p)
-        paint(Color.rgb(174, 213, 231)); c.drawOval(RectF(cx - 25f, 21f, cx + 25f, 65f), p)
+        paint(Color.rgb(255, 132, 42)); c.drawRoundRect(RectF(cx - 49f, 31f, cx - 28f, 59f), 9f, 9f, p); c.drawRoundRect(RectF(cx + 28f, 31f, cx + 49f, 59f), 9f, 9f, p)
+        paint(Color.rgb(174, 185, 194)); c.drawOval(RectF(cx - 25f, 21f, cx + 25f, 65f), p)
         paint(Color.rgb(228, 246, 255)); c.drawOval(RectF(cx - 21f, 23f, cx + 21f, 62f), p)
         paint(Color.rgb(16, 34, 56)); c.drawRoundRect(RectF(cx - 20, 33f, cx + 20, 58f), 10f, 10f, p)
-        paint(Color.rgb(97, 230, 239)); c.drawCircle(cx - 9, 44f, 4f, p); c.drawCircle(cx + 9, 44f, 4f, p)
+        paint(Color.rgb(40, 170, 255), Paint.Style.STROKE, 3f); c.drawCircle(cx - 10, 44f, 10f, p); c.drawCircle(cx + 10, 44f, 10f, p)
+        paint(Color.rgb(15, 70, 130)); c.drawCircle(cx - 10, 44f, 5f, p); c.drawCircle(cx + 10, 44f, 5f, p)
         c.drawRoundRect(RectF(cx - 7, 52f, cx + 7, 55f), 2f, 2f, p)
-        paint(Color.rgb(65, 91, 135)); c.drawRoundRect(RectF(cx - 24f, 68f, cx + 24f, 106f), 12f, 12f, p)
-        paint(Color.rgb(128, 145, 255)); c.drawRoundRect(RectF(cx - 18f, 72f, cx + 18f, 109f), 8f, 8f, p)
-        paint(Color.rgb(97, 230, 239)); c.drawCircle(cx, 85f, 7f, p)
+        c.restore()
+        paint(Color.rgb(255, 132, 42)); c.drawRoundRect(RectF(cx - 26f, 68f, cx + 26f, 108f), 12f, 12f, p)
+        paint(Color.rgb(185, 199, 208)); c.drawRoundRect(RectF(cx - 22f, 68f, cx + 22f, 106f), 10f, 10f, p)
+        paint(Color.rgb(248, 252, 255)); c.drawRoundRect(RectF(cx - 18f, 72f, cx + 18f, 109f), 8f, 8f, p)
+        paint(Color.rgb(97, 230, 239)); c.drawRoundRect(RectF(cx - 7f, 80f, cx + 7f, 92f), 3f, 3f, p)
         paint(Color.rgb(174, 213, 231)); c.drawRoundRect(RectF(cx - 13f, 104f, cx + 13f, 118f), 6f, 6f, p)
         paint(Color.rgb(174, 213, 231), Paint.Style.STROKE, 7f)
         c.drawLine(cx - 21f, 75f, cx - 29f, 88f + swing * .3f, p); c.drawLine(cx - 29f, 88f + swing * .3f, cx - 26f + swing, 105f, p)
-        c.drawLine(cx + 21f, 75f, cx + 29f, 88f - swing * .3f, p); c.drawLine(cx + 29f, 88f - swing * .3f, cx + 26f - swing, 105f, p)
-        paint(Color.rgb(97, 230, 239)); c.drawCircle(cx - 29f, 89f + swing * .3f, 4f, p); c.drawCircle(cx + 29f, 89f - swing * .3f, 4f, p)
-        paint(Color.rgb(228, 246, 255)); c.drawCircle(cx - 26f + swing, 107f, 5f, p); c.drawCircle(cx + 26f - swing, 107f, 5f, p)
-        paint(Color.rgb(119, 184, 215), Paint.Style.STROKE, 9f)
+        c.drawLine(cx + 21f, 75f, cx + 29f, 88f - swing * .3f - wave, p); c.drawLine(cx + 29f, 88f - swing * .3f - wave, cx + 26f - swing, 105f - wave, p)
+        paint(Color.rgb(97, 230, 239)); c.drawCircle(cx - 29f, 89f + swing * .3f, 4f, p); c.drawCircle(cx + 29f, 89f - swing * .3f - wave, 4f, p)
+        paint(Color.rgb(228, 246, 255)); c.drawCircle(cx - 26f + swing, 107f, 5f, p); c.drawCircle(cx + 26f - swing, 107f - wave, 5f, p)
+        paint(Color.rgb(176, 188, 198), Paint.Style.STROKE, 9f)
         c.drawLine(cx - 9, 111f, cx - 12 - swing * .35f, 143f, p); c.drawLine(cx + 9, 111f, cx + 12 + swing * .35f, 143f, p)
-        paint(Color.rgb(214, 250, 255))
+        paint(Color.rgb(255, 132, 42))
+        c.drawRoundRect(RectF(cx - 25f, 140f, cx - 5f, 154f), 5f, 5f, p); c.drawRoundRect(RectF(cx + 5f, 140f, cx + 25f, 154f), 5f, 5f, p)
+        paint(Color.rgb(235, 243, 248))
         c.drawRoundRect(RectF(cx - 23 - swing * .35f, 140f, cx - 6 - swing * .35f, 151f), 5f, 5f, p)
         c.drawRoundRect(RectF(cx + 6 + swing * .35f, 140f, cx + 23 + swing * .35f, 151f), 5f, 5f, p)
         c.restore()

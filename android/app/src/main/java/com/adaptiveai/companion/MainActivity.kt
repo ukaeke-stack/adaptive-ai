@@ -20,6 +20,7 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private var pendingMediaPermission: android.webkit.PermissionRequest? = null
+    private lateinit var speechBridge: AndroidSpeechBridge
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF07111F.toInt()) }
@@ -28,8 +29,10 @@ class MainActivity : Activity() {
         val overlay = Button(this).apply { text = "Enable roaming robot"; setOnClickListener { enableOverlay() } }
         bar.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(overlay)
+        speechBridge = AndroidSpeechBridge(this)
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
+            addJavascriptInterface(speechBridge, "AdaptiveNative")
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = WebViewClient()
@@ -55,6 +58,11 @@ class MainActivity : Activity() {
         root.addView(bar)
         root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
+        if (Settings.canDrawOverlays(this)) startRobotService()
+    }
+    private fun startRobotService() {
+        val intent = Intent(this, RobotOverlayService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
     }
     private fun enableOverlay() {
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -67,8 +75,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Allow Adaptive AI to display over other apps, then return here and tap Enable roaming robot again.", Toast.LENGTH_LONG).show()
             return
         }
-        val intent = Intent(this, RobotOverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+        startRobotService()
         Toast.makeText(this, "Robot overlay enabled. It can remain visible over other apps while Android allows the service to run.", Toast.LENGTH_LONG).show()
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -88,6 +95,11 @@ class MainActivity : Activity() {
             }
             if (allowed) request?.grant(request.resources) else request?.deny()
         }
+    }
+    override fun onDestroy() {
+        if (::speechBridge.isInitialized) speechBridge.close()
+        if (::web.isInitialized) { web.stopLoading(); web.destroy() }
+        super.onDestroy()
     }
     override fun onBackPressed() {
         if (::web.isInitialized && web.canGoBack()) web.goBack() else super.onBackPressed()

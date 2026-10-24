@@ -33,54 +33,32 @@ import kotlin.math.max
 
 class RobotOverlayService : Service() {
     private lateinit var wm: WindowManager
-    private var robot: WalkingRobotView? = null
+    private var robotWeb: WebView? = null
     private var robotParams: WindowManager.LayoutParams? = null
-    private var panel: LinearLayout? = null
-    private var panelParams: WindowManager.LayoutParams? = null
     private var speechBridge: AndroidSpeechBridge? = null
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0
     private var y = 0
-    private var direction = 1
-    private var verticalDirection = 1
-    private var touchRawX = 0f
-    private var touchRawY = 0f
-    private var touchStartX = 0
-    private var touchStartY = 0
-    private var dragged = false
-    private var pendingListenOnOpen = false
+    private var directionX = 1
+    private var directionY = 1
 
-    private val step = object : Runnable {
+    private val roam = object : Runnable {
         override fun run() {
-            val p = robotParams
-            val v = robot
-            if (p != null && v != null) {
-                // Keep the robot roaming while the floating chat panel is open.
-                if (panel == null) {
-                    val dm = resources.displayMetrics
-                    val screenWidth = dm.widthPixels
-                    val screenHeight = dm.heightPixels
-                    x += direction * 4
-                    y += verticalDirection * 2
-                    if (x <= 0) { x = 0; direction = 1; v.facingRight = true }
-                    if (x >= max(0, screenWidth - v.width)) {
-                        x = max(0, screenWidth - v.width)
-                        direction = -1
-                        v.facingRight = false
-                    }
-                    val minY = (48 * dm.density).toInt()
-                    val maxY = max(minY, screenHeight - v.height - (72 * dm.density).toInt())
-                    if (y <= minY) { y = minY; verticalDirection = 1 }
-                    if (y >= maxY) { y = maxY; verticalDirection = -1 }
-                    p.x = x
-                    p.y = y
-                    try { wm.updateViewLayout(v, p) } catch (_: Exception) {}
-                    v.walkPhase += 0.34f
-                    v.invalidate()
-                } else {
-                    v.walkPhase += 0.16f
-                    v.invalidate()
-                }
+            val view = robotWeb
+            val params = robotParams
+            if (view != null && params != null) {
+                val dm = resources.displayMetrics
+                val maxX = max(0, dm.widthPixels - view.width.coerceAtLeast((100 * dm.density).toInt()))
+                val maxY = max((24 * dm.density).toInt(), dm.heightPixels - view.height.coerceAtLeast((190 * dm.density).toInt()) - (70 * dm.density).toInt())
+                x += directionX * 3
+                y += directionY * 2
+                if (x <= 0) { x = 0; directionX = 1 }
+                if (x >= maxX) { x = maxX; directionX = -1 }
+                if (y <= (24 * dm.density).toInt()) { y = (24 * dm.density).toInt(); directionY = 1 }
+                if (y >= maxY) { y = maxY; directionY = -1 }
+                params.x = x
+                params.y = y
+                try { wm.updateViewLayout(view, params) } catch (_: Exception) {}
             }
             handler.postDelayed(this, 42)
         }
@@ -93,98 +71,17 @@ class RobotOverlayService : Service() {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
-        val v = WalkingRobotView(this)
-        robot = v
-        robotParams = WindowManager.LayoutParams(
-            116, 190, type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = resources.displayMetrics.heightPixels / 3
-        }
-        v.setOnTouchListener { view, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    touchRawX = event.rawX; touchRawY = event.rawY
-                    touchStartX = robotParams?.x ?: 0
-                    touchStartY = robotParams?.y ?: 0
-                    dragged = false
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - touchRawX
-                    val dy = event.rawY - touchRawY
-                    if (kotlin.math.abs(dx) > 8 || kotlin.math.abs(dy) > 8) dragged = true
-                    if (dragged) {
-                        val p = robotParams
-                        if (p != null) {
-                            p.x = (touchStartX + dx).toInt()
-                            p.y = (touchStartY + dy).toInt()
-                            x = p.x
-                            try { wm.updateViewLayout(view, p) } catch (_: Exception) {}
-                        }
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!dragged) {
-                        view.performClick()
-                        if (panel == null) showChatPanel(startListening = true) else startPanelListening()
-                    }
-                    true
-                }
-                else -> true
-            }
-        }
-        wm.addView(v, robotParams)
-        handler.post(step)
-    }
-
-    private fun showChatPanel(startListening: Boolean = false) {
-        pendingListenOnOpen = startListening
-        if (panel != null) return
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(7, 17, 31))
-            elevation = 14f
-        }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(10, 6, 6, 6)
-            setBackgroundColor(Color.rgb(18, 37, 59))
-        }
-        val title = TextView(this).apply {
-            text = "Norah voice chat"
-            textSize = 15f
-            setTextColor(Color.WHITE)
-        }
-        val close = Button(this).apply {
-            text = "Hide"
-            setOnClickListener { hideChatPanel() }
-        }
-        header.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(close)
-        val miniWeb = WebView(this).apply {
+        val density = resources.displayMetrics.density
+        val view = WebView(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            alpha = 1f
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             settings.allowContentAccess = true
             settings.allowFileAccess = false
             CookieManager.getInstance().setAcceptCookie(true)
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    super.onPageFinished(view, url)
-                    if (pendingListenOnOpen) {
-                        pendingListenOnOpen = false
-                        view?.evaluateJavascript("window.NorahStartListening && window.NorahStartListening()", null)
-                    }
-                }
-            }
+            webViewClient = WebViewClient()
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest) {
                     handler.post {
@@ -192,77 +89,49 @@ class RobotOverlayService : Service() {
                             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                         val hasCamera = !request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE) ||
                             checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                        if (hasMic && hasCamera) {
-                            request.grant(request.resources)
-                        } else {
-                            request.deny()
-                            Toast.makeText(this@RobotOverlayService, "Open Adaptive AI and grant microphone and camera permissions before using voice or camera in floating chat.", Toast.LENGTH_LONG).show()
-                        }
+                        if (hasMic && hasCamera) request.grant(request.resources) else request.deny()
                     }
                 }
             }
-            loadUrl("https://adaptive-ai-huve.onrender.com/app/?native=1")
-            alpha = 0f
+            speechBridge = AndroidSpeechBridge(this@RobotOverlayService).also { bridge ->
+                bridge.attachWebView(this)
+                addJavascriptInterface(bridge, "AdaptiveNative")
+            }
+            loadUrl("https://adaptive-ai-huve.onrender.com/app/?overlay=1")
         }
-        speechBridge = AndroidSpeechBridge(this).also { bridge ->
-            bridge.attachWebView(miniWeb)
-            miniWeb.addJavascriptInterface(bridge, "AdaptiveNative")
-        }
-        val status = TextView(this).apply {
-            text = "Voice chat is ready. Speak after tapping the robot. Norah will reply aloud."
-            textSize = 13f
-            setTextColor(Color.rgb(220, 235, 248))
-            setPadding(12, 8, 12, 12)
-        }
-        root.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        root.addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        root.addView(miniWeb, LinearLayout.LayoutParams(1, 1))
-        val dm = resources.displayMetrics
-        val width = minOf((dm.widthPixels * 0.86f).toInt(), (320 * dm.density).toInt())
-        val height = (104 * dm.density).toInt()
-        val lp = WindowManager.LayoutParams(
-            width, height, type,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+        robotWeb = view
+        robotParams = WindowManager.LayoutParams(
+            (100 * density).toInt(), (190 * density).toInt(), type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = ((dm.widthPixels - width) / 2).coerceAtLeast(0)
-            y = (dm.heightPixels * 0.12f).toInt()
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            x = 0
+            y = resources.displayMetrics.heightPixels / 3
+            dimAmount = 0f
         }
-        panel = root
-        panelParams = lp
-        try { wm.addView(root, lp) } catch (e: Exception) {
-            panel = null; panelParams = null
-            Toast.makeText(this, "Could not open floating chat. Check the display-over-other-apps permission.", Toast.LENGTH_LONG).show()
+        try {
+            wm.addView(view, robotParams)
+            x = robotParams?.x ?: 0
+            y = robotParams?.y ?: 0
+            handler.post(roam)
+        } catch (_: Exception) {
+            stopSelf()
         }
-    }
-
-    private fun startPanelListening() {
-        val web = panel?.getChildAt(2) as? WebView ?: return
-        web.evaluateJavascript("window.NorahStartListening && window.NorahStartListening()", null)
-    }
-
-    private fun hideChatPanel() {
-        pendingListenOnOpen = false
-        val p = panel
-        if (p != null) {
-            try { (p.getChildAt(2) as? WebView)?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() }; wm.removeView(p) } catch (_: Exception) {}
-            speechBridge?.close()
-            speechBridge = null
-        }
-        panel = null
-        panelParams = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+
     override fun onDestroy() {
-        handler.removeCallbacks(step)
-        hideChatPanel()
-        try { robot?.let { wm.removeView(it) } } catch (_: Exception) {}
-        robot = null
+        handler.removeCallbacks(roam)
+        try { robotWeb?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() } } catch (_: Exception) {}
+        try { robotWeb?.let { wm.removeView(it) } } catch (_: Exception) {}
+        speechBridge?.close()
+        speechBridge = null
+        robotWeb = null
         super.onDestroy()
     }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createNotificationChannel() {
@@ -271,12 +140,13 @@ class RobotOverlayService : Service() {
             manager.createNotificationChannel(NotificationChannel("adaptive_robot", "Adaptive AI floating robot", NotificationManager.IMPORTANCE_LOW))
         }
     }
+
     private fun notification(): Notification {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return if (Build.VERSION.SDK_INT >= 26)
             Notification.Builder(this, "adaptive_robot")
                 .setContentTitle("Adaptive AI robot is active")
-                .setContentText("Tap the walking robot to talk to Norah. Use Hide to close floating chat.")
+                .setContentText("Tap Norah's floating robot to start voice chat.")
                 .setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(open).setOngoing(true).build()
         else Notification.Builder(this).setContentTitle("Adaptive AI robot is active")
             .setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(open).build()

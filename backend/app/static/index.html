@@ -255,6 +255,13 @@ if(SpeechRecognition){
  handsFreeEnabled=false;cancelVoiceAutoSend=false;try{recognition.start()}catch(e){errorText.textContent='Voice input is already starting. Please wait.'}
 });
  $('voiceSupport').textContent='Voice input supported in this browser.';
+}else if(window.AdaptiveNative&&typeof window.AdaptiveNative.startListening==='function'){
+ micButton.disabled=false;$('voiceSupport').textContent='Android voice input is ready. Tap the microphone to speak.';
+ micButton.addEventListener('click',()=>{
+  if(nativeListening){window.AdaptiveNative.stopListening();return}
+  if(!authenticated){setState('idle','Sign in to chat','Sign in before sending a voice message.');return}
+  try{window.AdaptiveNative.startListening()}catch(e){errorText.textContent='Could not start the microphone. Tap again.'}
+ });
 }else{
  micButton.disabled=true;$('voiceSupport').textContent='Voice input unsupported here; use text. Voice playback may still work.';
 }

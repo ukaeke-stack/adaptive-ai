@@ -39,7 +39,9 @@ class RobotOverlayService : Service() {
     private var panelParams: WindowManager.LayoutParams? = null
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0
+    private var y = 0
     private var direction = 1
+    private var verticalDirection = 1
     private var touchRawX = 0f
     private var touchRawY = 0f
     private var touchStartX = 0
@@ -53,17 +55,25 @@ class RobotOverlayService : Service() {
             if (p != null && v != null) {
                 // Keep the robot roaming while the floating chat panel is open.
                 if (panel == null) {
-                    val screenWidth = resources.displayMetrics.widthPixels
-                    x += direction * 5
+                    val dm = resources.displayMetrics
+                    val screenWidth = dm.widthPixels
+                    val screenHeight = dm.heightPixels
+                    x += direction * 4
+                    y += verticalDirection * 2
                     if (x <= 0) { x = 0; direction = 1; v.facingRight = true }
                     if (x >= max(0, screenWidth - v.width)) {
                         x = max(0, screenWidth - v.width)
                         direction = -1
                         v.facingRight = false
                     }
+                    val minY = (48 * dm.density).toInt()
+                    val maxY = max(minY, screenHeight - v.height - (72 * dm.density).toInt())
+                    if (y <= minY) { y = minY; verticalDirection = 1 }
+                    if (y >= maxY) { y = maxY; verticalDirection = -1 }
                     p.x = x
+                    p.y = y
                     try { wm.updateViewLayout(v, p) } catch (_: Exception) {}
-                    v.walkPhase += 0.38f
+                    v.walkPhase += 0.34f
                     v.invalidate()
                 } else {
                     v.walkPhase += 0.16f

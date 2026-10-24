@@ -18,7 +18,9 @@ _RATE_WINDOW_SECONDS = 60.0
 _RATE_LIMIT = 60
 _MAX_BODY_BYTES = 64 * 1024
 _MAX_TRACKED_CLIENTS = 5000
+_AUTH_RATE_LIMIT = 10
 _requests_by_client: dict[str, deque[float]] = {}
+_auth_requests_by_client: dict[str, deque[float]] = {}
 _rate_lock = threading.Lock()
 
 
@@ -45,6 +47,18 @@ def _is_rate_limited(client_key: str, now: float) -> bool:
         return False
 
 
+
+def _is_auth_rate_limited(client_key: str, now: float) -> bool:
+    with _rate_lock:
+        recent = _auth_requests_by_client.setdefault(client_key, deque())
+        cutoff = now - _RATE_WINDOW_SECONDS
+        while recent and recent[0] <= cutoff:
+            recent.popleft()
+        if len(recent) >= _AUTH_RATE_LIMIT:
+            return True
+        recent.append(now)
+        return False
+
 def _security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -59,6 +73,12 @@ async def protect_api_routes(request: Request, call_next):
     app_env = os.getenv("APP_ENV", "production").strip().lower()
 
     is_auth_endpoint = request.url.path.startswith("/v1/auth/")
+    if is_auth_endpoint and request.method not in ("GET", "HEAD", "OPTIONS"):
+        if _is_auth_rate_limited(_client_key(request), time.monotonic()):
+            return _security_headers(JSONResponse(
+                status_code=429, content={"detail": "Too many account attempts. Please wait and retry."},
+                headers={"Retry-After": str(int(_RATE_WINDOW_SECONDS))},
+            ))
     if is_api and app_env == "production" and not is_auth_endpoint:
         # Browser users authenticate with an HTTP-only server-managed session.
         # Keep bearer-token access for existing controlled API clients during migration.

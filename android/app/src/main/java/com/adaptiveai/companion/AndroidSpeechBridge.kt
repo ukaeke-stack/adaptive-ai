@@ -6,25 +6,33 @@ import android.webkit.JavascriptInterface
 import java.util.Locale
 
 class AndroidSpeechBridge(context: Context) : AutoCloseable {
-    @Volatile private var engineReady = false
+    @Volatile private var engineReady: Boolean = false
     @Volatile private var pendingText: String? = null
-    private val engine = TextToSpeech(context.applicationContext) { status ->
-        engineReady = status == TextToSpeech.SUCCESS
-        if (engineReady) {
-            engine.language = Locale("en", "NG")
-            pendingText?.let {
-                engine.speak(it, TextToSpeech.QUEUE_FLUSH, null, "adaptive-ai-reply")
+    private lateinit var engine: TextToSpeech
+
+    init {
+        engine = TextToSpeech(context.applicationContext) { status: Int ->
+            engineReady = status == TextToSpeech.SUCCESS
+            if (engineReady) {
+                engine.language = Locale("en", "NG")
+                val queued: String? = pendingText
                 pendingText = null
+                if (queued != null) {
+                    engine.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "adaptive-ai-reply")
+                }
             }
         }
     }
 
     @JavascriptInterface
     fun speak(text: String?) {
-        val safe = text?.take(12000)?.trim().orEmpty()
+        val safe: String = text?.take(12000)?.trim().orEmpty()
         if (safe.isEmpty()) return
-        if (engineReady) engine.speak(safe, TextToSpeech.QUEUE_FLUSH, null, "adaptive-ai-reply")
-        else pendingText = safe
+        if (engineReady) {
+            engine.speak(safe, TextToSpeech.QUEUE_FLUSH, null, "adaptive-ai-reply")
+        } else {
+            pendingText = safe
+        }
     }
 
     @JavascriptInterface
@@ -35,8 +43,10 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
 
     override fun close() {
         pendingText = null
-        engine.stop()
-        engine.shutdown()
-        engineReady = false
+        if (engineReady) {
+            engine.stop()
+            engine.shutdown()
+            engineReady = false
+        }
     }
 }

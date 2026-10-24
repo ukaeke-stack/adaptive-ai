@@ -58,6 +58,11 @@ class MainActivity : Activity() {
         root.addView(bar)
         root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
+        if (Settings.canDrawOverlays(this)) startRobotService()
+    }
+    private fun startRobotService() {
+        val intent = Intent(this, RobotOverlayService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
     }
     private fun enableOverlay() {
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -70,8 +75,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Allow Adaptive AI to display over other apps, then return here and tap Enable roaming robot again.", Toast.LENGTH_LONG).show()
             return
         }
-        val intent = Intent(this, RobotOverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+        startRobotService()
         Toast.makeText(this, "Robot overlay enabled. It can remain visible over other apps while Android allows the service to run.", Toast.LENGTH_LONG).show()
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

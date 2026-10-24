@@ -156,7 +156,8 @@ class RobotOverlayService : Service() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(7, 17, 31))
             elevation = 12f
-            visibility = View.GONE
+            visibility = View.VISIBLE
+            alpha = 0f
         }
         val scroll = ScrollView(this).apply {
             isFillViewport = true
@@ -215,6 +216,7 @@ class RobotOverlayService : Service() {
             bridge.overlayTextListener = { text ->
                 reply.text = text
                 root.visibility = View.VISIBLE
+                root.alpha = 1f
                 val dmNow = resources.displayMetrics
                 val widthNow = minOf((dmNow.widthPixels * 0.86f).toInt(), (320 * dmNow.density).toInt())
                 val heightNow = (88 * dmNow.density).toInt()
@@ -223,6 +225,7 @@ class RobotOverlayService : Service() {
                 val below = (robotP?.y ?: (screenHeight / 3)) + (190 * dmNow.density).toInt()
                 val yNow = if (below + heightNow < screenHeight) below else ((robotP?.y ?: 0) - heightNow).coerceAtLeast(12)
                 panelParams?.let { lp ->
+                    lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
                     lp.width = widthNow
                     lp.height = heightNow
                     lp.x = ((robotP?.x ?: ((dmNow.widthPixels - widthNow) / 2))).coerceIn(0, (dmNow.widthPixels - widthNow).coerceAtLeast(0))
@@ -246,7 +249,7 @@ class RobotOverlayService : Service() {
         val height = (88 * dm.density).toInt()
         val lp = WindowManager.LayoutParams(
             width, height, type,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -269,7 +272,11 @@ class RobotOverlayService : Service() {
 
     private fun startPanelListening() {
         val web = miniWebView ?: return
-        panel?.visibility = View.GONE
+        panel?.alpha = 0f
+        panelParams?.let { lp ->
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            try { panel?.let { wm.updateViewLayout(it, lp) } } catch (_: Exception) {}
+        }
         responseText?.text = ""
         web.evaluateJavascript("window.NorahStartListening && window.NorahStartListening()", null)
     }

@@ -25,3 +25,14 @@ def test_voice_interface_guards_optional_speech_synthesis_api():
     assert response.status_code == 200
     assert "speechSynthesis?.cancel()" not in response.text
     assert "'speechSynthesis' in window&&window.speechSynthesis.speaking" in response.text
+
+
+def test_voice_interface_auto_sends_after_speech_ends_and_has_dynamic_robot():
+    response = client.get("/app/")
+    assert response.status_code == 200
+    assert "recognition.onspeechend" in response.text
+    assert "Sending your spoken message automatically" in response.text
+    assert "recognition.onend" in response.text
+    assert "@keyframes roam" in response.text
+    assert "@keyframes speakMove" in response.text
+    assert "synth.resume()" in response.text

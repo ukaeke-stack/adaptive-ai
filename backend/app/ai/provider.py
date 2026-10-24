@@ -51,8 +51,8 @@ def generate_reply(message: str, history: list[dict] | None = None) -> str:
     # fact that the app has already delivered a recognized transcript.
     if _AUDIO_CHECK.fullmatch(message.strip()):
         return (
-            "I received your words as text from the app's speech recognition, so I can respond to them. "
-            "I do not receive raw microphone audio directly in this chat endpoint."
+            "Yes, I’m here and ready to respond. I understood your words through the phone’s speech recognition. "
+            "Go ahead and tell me what you need."
         )
 
     api_key = os.getenv("GROQ_API_KEY", "").strip()

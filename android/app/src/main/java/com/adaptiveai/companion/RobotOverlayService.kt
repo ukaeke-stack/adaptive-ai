@@ -201,7 +201,7 @@ class RobotOverlayService : Service() {
                     }
                 }
             }
-            loadUrl("https://adaptive-ai-huve.onrender.com/app/")
+            loadUrl("https://adaptive-ai-huve.onrender.com/app/?native=1")
             alpha = 0f
         }
         speechBridge = AndroidSpeechBridge(this).also { bridge ->

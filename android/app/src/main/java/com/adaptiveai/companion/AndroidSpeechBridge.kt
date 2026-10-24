@@ -7,6 +7,7 @@ import android.webkit.JavascriptInterface
 import java.util.Locale
 
 class AndroidSpeechBridge(context: Context) : AutoCloseable {
+    @Volatile private var initializationComplete: Boolean = false
     @Volatile private var engineReady: Boolean = false
     @Volatile private var pendingText: String? = null
     private lateinit var engine: TextToSpeech
@@ -14,38 +15,53 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
     init {
         engine = TextToSpeech(context.applicationContext) { status: Int ->
             engineReady = status == TextToSpeech.SUCCESS && configureLanguage()
+            initializationComplete = true
             val queued: String? = pendingText
             pendingText = null
             if (engineReady && queued != null) {
-                engine.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "adaptive-ai-reply")
+                speakNow(queued)
             }
         }
     }
 
     private fun configureLanguage(): Boolean {
-        // Explicitly route spoken replies through the normal media/speech output.
+        // Use the normal media stream so speech follows the phone's media volume.
         engine.setAudioAttributes(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build()
         )
-        val candidates = listOf(Locale("en", "NG"), Locale.UK, Locale.US, Locale.getDefault())
+        val candidates = listOf(
+            Locale("en", "NG"),
+            Locale.US,
+            Locale.UK,
+            Locale.ENGLISH,
+            Locale.getDefault()
+        )
         val selected = candidates.firstOrNull {
             engine.isLanguageAvailable(it) >= TextToSpeech.LANG_AVAILABLE
         } ?: return false
         return engine.setLanguage(selected) >= TextToSpeech.LANG_AVAILABLE
     }
 
+    private fun speakNow(text: String): Boolean {
+        return engine.speak(
+            text,
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            "adaptive-ai-reply"
+        ) == TextToSpeech.SUCCESS
+    }
+
     @JavascriptInterface
-    fun speak(text: String?) {
+    fun speak(text: String?): Boolean {
         val safe: String = text?.take(12000)?.trim().orEmpty()
-        if (safe.isEmpty()) return
-        if (engineReady) {
-            engine.speak(safe, TextToSpeech.QUEUE_FLUSH, null, "adaptive-ai-reply")
-        } else {
-            pendingText = safe
-        }
+        if (safe.isEmpty()) return false
+        if (engineReady) return speakNow(safe)
+        if (initializationComplete) return false
+        pendingText = safe
+        return true
     }
 
     @JavascriptInterface
@@ -56,10 +72,11 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
 
     override fun close() {
         pendingText = null
-        if (engineReady) {
+        if (::engine.isInitialized) {
             engine.stop()
             engine.shutdown()
             engineReady = false
+            initializationComplete = true
         }
     }
 }

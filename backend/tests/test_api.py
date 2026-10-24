@@ -1,3 +1,8 @@
+import os
+
+# Keep the test client isolated from deployment settings; production auth is tested below.
+os.environ["APP_ENV"] = "test"
+
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -64,3 +69,28 @@ def test_wrong_argument_shape_is_rejected():
         "name": "calculator", "arguments": {"operation": "add", "a": 1}
     })
     assert response.status_code == 422
+
+
+def test_production_api_requires_bearer_token(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("ADAPTIVE_AI_API_TOKEN", "test-secret-token")
+    assert client.get("/v1/capabilities").status_code == 401
+    assert client.get("/v1/capabilities", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    response = client.get(
+        "/v1/capabilities",
+        headers={"Authorization": "Bearer test-secret-token"},
+    )
+    assert response.status_code == 200
+
+
+def test_production_api_fails_closed_when_token_missing(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("ADAPTIVE_AI_API_TOKEN", raising=False)
+    response = client.get("/v1/capabilities")
+    assert response.status_code == 503
+
+
+def test_omitted_app_env_defaults_to_production(monkeypatch):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.setenv("ADAPTIVE_AI_API_TOKEN", "test-secret-token")
+    assert client.get("/v1/capabilities").status_code == 401

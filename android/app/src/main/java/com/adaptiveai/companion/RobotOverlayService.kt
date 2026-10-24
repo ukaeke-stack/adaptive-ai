@@ -38,6 +38,7 @@ class RobotOverlayService : Service() {
     private var panel: LinearLayout? = null
     private var panelParams: WindowManager.LayoutParams? = null
     private var speechBridge: AndroidSpeechBridge? = null
+    private var responseView: TextView? = null
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0
     private var y = 0
@@ -209,11 +210,15 @@ class RobotOverlayService : Service() {
             miniWeb.addJavascriptInterface(bridge, "AdaptiveNative")
         }
         val status = TextView(this).apply {
-            text = "Voice chat is ready. Speak after tapping the robot. Norah will reply aloud."
+            text = "Opening secure voice session…"
             textSize = 13f
             setTextColor(Color.rgb(220, 235, 248))
             setPadding(12, 8, 12, 12)
+            maxLines = 4
         }
+        responseView = status
+        speechBridge?.overlayTextListener = { message -> responseView?.text = message }
+        speechBridge?.overlayListeningListener = { responseView?.text = "Listening… Speak now. Norah will answer aloud." }
         root.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(miniWeb, LinearLayout.LayoutParams(1, 1))
@@ -253,6 +258,7 @@ class RobotOverlayService : Service() {
         }
         panel = null
         panelParams = null
+        responseView = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY

@@ -66,18 +66,32 @@ def analyze_image(request: VisionRequest):
         "temperature": 0.2,
     }
     try:
+        models_to_try = [model]
+        fallback_model = "qwen/qwen3.8-27b"
+        if model != fallback_model:
+            models_to_try.append(fallback_model)
+        data = None
+        used_model = model
         with httpx.Client(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-            response = client.post(
-                f"{base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+            for candidate in models_to_try:
+                payload["model"] = candidate
+                response = client.post(
+                    f"{base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=payload,
+                )
+                if response.status_code in (400, 404, 422) and candidate != models_to_try[-1]:
+                    continue
+                response.raise_for_status()
+                data = response.json()
+                used_model = candidate
+                break
+        if data is None:
+            raise ValueError("vision provider returned no result")
         answer = data["choices"][0]["message"]["content"]
         if not isinstance(answer, str) or not answer.strip():
             raise ValueError("empty response")
-        return {"analysis": answer.strip(), "model": model}
+        return {"analysis": answer.strip(), "model": used_model}
     except httpx.HTTPStatusError as exc:
         # Avoid forwarding provider response bodies, which may contain operational details.
         if exc.response.status_code in (400, 404, 422):

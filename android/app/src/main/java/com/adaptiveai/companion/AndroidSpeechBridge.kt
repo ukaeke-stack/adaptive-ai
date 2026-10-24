@@ -12,16 +12,22 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
 
     init {
         engine = TextToSpeech(context.applicationContext) { status: Int ->
-            engineReady = status == TextToSpeech.SUCCESS
-            if (engineReady) {
-                engine.language = Locale("en", "NG")
-                val queued: String? = pendingText
-                pendingText = null
-                if (queued != null) {
-                    engine.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "adaptive-ai-reply")
-                }
+            engineReady = status == TextToSpeech.SUCCESS && configureLanguage()
+            val queued: String? = pendingText
+            pendingText = null
+            if (engineReady && queued != null) {
+                engine.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "adaptive-ai-reply")
             }
         }
+    }
+
+    private fun configureLanguage(): Boolean {
+        val nigerianEnglish = Locale("en", "NG")
+        val usEnglish = Locale.US
+        val preferredAvailable = engine.isLanguageAvailable(nigerianEnglish) >= TextToSpeech.LANG_AVAILABLE
+        val selected = if (preferredAvailable) nigerianEnglish else usEnglish
+        if (engine.isLanguageAvailable(selected) < TextToSpeech.LANG_AVAILABLE) return false
+        return engine.setLanguage(selected) >= TextToSpeech.LANG_AVAILABLE
     }
 
     @JavascriptInterface

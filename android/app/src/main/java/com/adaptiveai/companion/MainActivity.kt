@@ -55,6 +55,7 @@ class MainActivity : Activity() {
             }
             loadUrl("https://adaptive-ai-huve.onrender.com/app/")
         }
+        speechBridge.attachWebView(web)
         root.addView(bar)
         root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)

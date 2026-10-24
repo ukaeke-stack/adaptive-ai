@@ -9,7 +9,9 @@ def test_voice_chat_interface_is_served_same_origin():
     assert response.status_code == 200
     assert "Adaptive AI" in response.text
     assert "SpeechRecognition" in response.text
-    assert "ADAPTIVE_AI_API_TOKEN" in response.text
+    assert "apiToken" not in response.text
+    assert "Owner sign in" in response.text
+    assert "Authorization':'Bearer" not in response.text
     assert "fetch('/v1/chat'" in response.text
 
 
@@ -17,6 +19,8 @@ def test_voice_interface_does_not_persist_api_token():
     response = client.get("/app/")
     assert response.status_code == 200
     assert "sessionStorage" not in response.text
+    assert "localStorage" not in response.text
+    assert "credentials:'same-origin'" in response.text
     assert "localStorage" not in response.text
 
 
@@ -41,3 +45,12 @@ def test_robot_has_distinct_idle_listening_and_speaking_motion():
     assert "@keyframes roam" in response.text
     assert "@keyframes listen-bob" in response.text
     assert "@keyframes speak-bob" in response.text
+
+
+def test_account_forms_include_owner_enrollment_and_recovery():
+    response = client.get("/app/")
+    assert response.status_code == 200
+    assert "/v1/auth/enroll-owner" in response.text
+    assert "/v1/auth/login" in response.text
+    assert "/v1/auth/recover" in response.text
+    assert "ADAPTIVE_AI_API_TOKEN" not in response.text

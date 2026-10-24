@@ -7,7 +7,7 @@ client = TestClient(app)
 def test_voice_chat_interface_is_served_same_origin():
     response = client.get("/app/")
     assert response.status_code == 200
-    assert "Adaptive AI" in response.text
+    assert "Norah" in response.text
     assert "SpeechRecognition" in response.text
     assert "apiToken" not in response.text
     assert "Owner sign in" in response.text

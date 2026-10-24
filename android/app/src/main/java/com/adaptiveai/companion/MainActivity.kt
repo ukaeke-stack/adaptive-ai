@@ -36,10 +36,17 @@ class MainActivity : Activity() {
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
                     runOnUiThread {
-                        if (request.resources.contains(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
-                            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) request.grant(request.resources)
-                            else { pendingMediaPermission = request; requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 902) }
-                        } else request.deny()
+                        val needed = mutableListOf<String>()
+                        if (request.resources.contains(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE) &&
+                            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                            needed.add(android.Manifest.permission.RECORD_AUDIO)
+                        }
+                        if (request.resources.contains(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE) &&
+                            checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                            needed.add(android.Manifest.permission.CAMERA)
+                        }
+                        if (needed.isEmpty()) request.grant(request.resources)
+                        else { pendingMediaPermission = request; requestPermissions(needed.toTypedArray(), 902) }
                     }
                 }
             }
@@ -72,7 +79,14 @@ class MainActivity : Activity() {
         }
         if (requestCode == 902) {
             val request = pendingMediaPermission; pendingMediaPermission = null
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) request?.grant(request.resources) else request?.deny()
+            val allowed = request != null && request.resources.all { resource ->
+                when (resource) {
+                    android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE -> checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                    android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE -> checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                    else -> false
+                }
+            }
+            if (allowed) request?.grant(request.resources) else request?.deny()
         }
     }
     override fun onBackPressed() {

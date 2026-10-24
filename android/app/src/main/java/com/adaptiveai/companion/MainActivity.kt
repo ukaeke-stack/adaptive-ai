@@ -50,6 +50,11 @@ class MainActivity : Activity() {
         setContentView(root)
     }
     private fun enableOverlay() {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 903)
+            Toast.makeText(this, "Allow microphone access so voice chat can work in the floating panel.", Toast.LENGTH_LONG).show()
+            return
+        }
         if (!Settings.canDrawOverlays(this)) {
             startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")), 901)
             Toast.makeText(this, "Allow Adaptive AI to display over other apps, then return here and tap Enable roaming robot again.", Toast.LENGTH_LONG).show()
@@ -61,6 +66,10 @@ class MainActivity : Activity() {
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 903) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) enableOverlay()
+            else Toast.makeText(this, "Microphone permission is needed for floating voice chat. You can enable the robot later from this screen.", Toast.LENGTH_LONG).show()
+        }
         if (requestCode == 902) {
             val request = pendingMediaPermission; pendingMediaPermission = null
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) request?.grant(request.resources) else request?.deny()

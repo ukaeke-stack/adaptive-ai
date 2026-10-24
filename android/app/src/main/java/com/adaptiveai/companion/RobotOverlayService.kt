@@ -159,8 +159,8 @@ class RobotOverlayService : Service() {
             setBackgroundColor(Color.rgb(18, 37, 59))
         }
         val title = TextView(this).apply {
-            text = "Norah"
-            textSize = 16f
+            text = "Norah voice chat"
+            textSize = 15f
             setTextColor(Color.WHITE)
         }
         val close = Button(this).apply {
@@ -202,16 +202,24 @@ class RobotOverlayService : Service() {
                 }
             }
             loadUrl("https://adaptive-ai-huve.onrender.com/app/")
+            alpha = 0f
         }
         speechBridge = AndroidSpeechBridge(this).also { bridge ->
             bridge.attachWebView(miniWeb)
             miniWeb.addJavascriptInterface(bridge, "AdaptiveNative")
         }
+        val status = TextView(this).apply {
+            text = "Voice chat is ready. Speak after tapping the robot. Norah will reply aloud."
+            textSize = 13f
+            setTextColor(Color.rgb(220, 235, 248))
+            setPadding(12, 8, 12, 12)
+        }
         root.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        root.addView(miniWeb, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(miniWeb, LinearLayout.LayoutParams(1, 1))
         val dm = resources.displayMetrics
-        val width = minOf((dm.widthPixels * 0.92f).toInt(), (380 * dm.density).toInt())
-        val height = (dm.heightPixels * 0.68f).toInt()
+        val width = minOf((dm.widthPixels * 0.86f).toInt(), (320 * dm.density).toInt())
+        val height = (104 * dm.density).toInt()
         val lp = WindowManager.LayoutParams(
             width, height, type,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
@@ -231,7 +239,7 @@ class RobotOverlayService : Service() {
     }
 
     private fun startPanelListening() {
-        val web = panel?.getChildAt(1) as? WebView ?: return
+        val web = panel?.getChildAt(2) as? WebView ?: return
         web.evaluateJavascript("window.NorahStartListening && window.NorahStartListening()", null)
     }
 
@@ -239,7 +247,7 @@ class RobotOverlayService : Service() {
         pendingListenOnOpen = false
         val p = panel
         if (p != null) {
-            try { (p.getChildAt(1) as? WebView)?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() }; wm.removeView(p) } catch (_: Exception) {}
+            try { (p.getChildAt(2) as? WebView)?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() }; wm.removeView(p) } catch (_: Exception) {}
             speechBridge?.close()
             speechBridge = null
         }

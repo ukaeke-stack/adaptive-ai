@@ -210,7 +210,6 @@ window.NorahNativeVoice={
  onStopped:()=>{nativeListening=false;micButton.classList.remove('active');micButton.textContent='🎙';setState('idle','Ready when you are','Listening stopped. Tap the microphone to speak again.')}
 };
 function activateFloatingRobot(){
- if(!authenticated){speakReply('Hi there! I’m ready to chat with you. Please sign in first, then tap me again and we can talk.');setState('idle','Ready to chat','Sign in to start a conversation.');return}
  const native=window.AdaptiveNative;
  if(native&&typeof native.startListening==='function'){
   if(nativeListening){native.stopListening();return}

@@ -1,16 +1,18 @@
 # Adaptive AI Android companion
 
-This native Android project is the foundation for a true system-wide robot overlay; a web page alone cannot draw over other apps. It wraps the production Adaptive AI web interface in a WebView and adds an opt-in Android foreground service that draws a full-body humanoid robot, animates a walking gait, roams horizontally, and can be dragged. A persistent Android notification indicates the service is active.
+This native Android project provides the system-level floating robot that a webpage cannot create by itself. It wraps the production Adaptive AI interface in a WebView and adds an opt-in Android foreground service. The full-body humanoid robot walks across the screen, can be dragged, stays above other apps while Android permits it, and opens a floating chat panel when tapped. The panel loads Adaptive AI directly so a user can start or continue a conversation without navigating back to the full-screen app.
 
 ## Build and install
 
-- Open the `android/` folder in Android Studio with JDK 17 and Android SDK 35.
-- Build the `app` debug APK.
-- Install it, open Adaptive AI, tap **Enable roaming robot**, and grant **Display over other apps**. Return to the app and tap the control again.
+- Open the android/ folder in Android Studio with JDK 17 and Android SDK 35.
+- Build the app debug APK.
+- Install it and open Adaptive AI.
+- Tap Enable roaming robot. Grant microphone permission and Android's Display over other apps permission when requested, then tap the control again if Android returns to the settings screen.
+- Tap the walking robot to show or hide the floating chat panel. Keep the ongoing notification visible while the robot is active.
 
-## Current milestone limits
+## Limits
 
-- The overlay can stay above other apps while Android allows the foreground service to run. Force-stop, some battery managers, or system policy may stop it.
-- Tapping the robot opens Adaptive AI's chat activity. The overlay does not yet have its own mini-chat panel, so this milestone does not yet meet the requirement to talk directly through the robot without opening the app.
-- Hands-free continuous conversation depends on Android WebView speech-recognition support and microphone permission. Screen-off/background microphone use is not enabled in this milestone.
-- No credentials or API tokens are embedded in the app.
+- The overlay can remain above other apps while Android allows the foreground service to run. Force-stop, some battery managers, or system policy can stop it.
+- Voice use in the floating panel requires microphone permission and WebView speech-recognition support. Android may restrict microphone use while the screen is off or the device is locked.
+- The panel uses the same production /app/ web interface; the user must sign in if there is no valid session.
+- No API credentials or tokens are embedded in the app.

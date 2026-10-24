@@ -18,3 +18,10 @@ def test_voice_interface_does_not_persist_api_token():
     assert response.status_code == 200
     assert "sessionStorage" not in response.text
     assert "localStorage" not in response.text
+
+
+def test_voice_interface_guards_optional_speech_synthesis_api():
+    response = client.get("/app/")
+    assert response.status_code == 200
+    assert "speechSynthesis?.cancel()" not in response.text
+    assert "'speechSynthesis' in window&&window.speechSynthesis.speaking" in response.text

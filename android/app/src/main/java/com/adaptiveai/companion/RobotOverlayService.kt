@@ -175,7 +175,7 @@ class RobotOverlayService : Service() {
                             request.grant(request.resources)
                         } else {
                             request.deny()
-                            Toast.makeText(this@RobotOverlayService, "Open Adaptive AI once and grant microphone permission to use voice in the floating chat.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(this@RobotOverlayService, "Open Adaptive AI and grant microphone and camera permissions before using voice or camera in floating chat.", Toast.LENGTH_LONG).show()
                         }
                     }
                 }

@@ -44,7 +44,7 @@ class VisionRequest(BaseModel):
 def analyze_image(request: VisionRequest):
     api_key = os.getenv("GROQ_API_KEY", "").strip()
     base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip().rstrip("/")
-    model = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct").strip()
+    model = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b").strip()
     parsed = urlparse(base_url)
     if not api_key:
         raise HTTPException(status_code=503, detail="Groq API key is not configured.")

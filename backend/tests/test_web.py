@@ -25,3 +25,19 @@ def test_voice_interface_guards_optional_speech_synthesis_api():
     assert response.status_code == 200
     assert "speechSynthesis?.cancel()" not in response.text
     assert "'speechSynthesis' in window&&window.speechSynthesis.speaking" in response.text
+
+
+def test_voice_input_auto_submits_when_recognition_ends():
+    response = client.get("/app/")
+    assert response.status_code == 200
+    assert "recognition.onend=()=>" in response.text
+    assert "sendMessage(spoken)" in response.text
+    assert "Review your message, then tap send." not in response.text
+
+
+def test_robot_has_distinct_idle_listening_and_speaking_motion():
+    response = client.get("/app/")
+    assert response.status_code == 200
+    assert "@keyframes roam" in response.text
+    assert "@keyframes listen-bob" in response.text
+    assert "@keyframes speak-bob" in response.text

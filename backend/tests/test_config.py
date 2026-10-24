@@ -2,11 +2,11 @@ import pytest
 from app.config import get_settings
 
 
-def test_defaults_are_safe_for_local_development(monkeypatch):
+def test_defaults_fail_closed_to_production(monkeypatch):
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("LOG_LEVEL", raising=False)
     settings = get_settings()
-    assert settings.app_env == "development"
+    assert settings.app_env == "production"
     assert settings.log_level == "INFO"
 
 

@@ -1,6 +1,6 @@
 # Adaptive AI
 
-A staged, safety-first personal AI assistant project. The repository contains a FastAPI backend, an allowlisted calculator tool, automated tests, a Groq chat provider adapter, SQLite-backed conversation history, and a production bearer-token guard.
+A staged, safety-first personal AI assistant project. The repository contains a FastAPI backend, an allowlisted calculator tool, automated tests, a Groq chat provider adapter, SQLite/PostgreSQL conversation history, and a shared bearer-token guard.
 
 The chat API requires a Groq API key configured privately on the server. Android automation and safe plugin generation are not implemented yet.
 
@@ -23,15 +23,17 @@ Supported environment settings:
 - `GROQ_MODEL`: optional; defaults to `openai/gpt-oss-20b`.
 - `GROQ_BASE_URL`: optional; defaults to `https://api.groq.com/openai/v1`. The adapter accepts only the official Groq HTTPS API host.
 
-The adapter uses Groq's OpenAI-compatible chat-completions endpoint. It sends the system instruction, the current message, and up to 20 prior user/assistant messages. The provider's raw errors and credentials are not returned to API clients. Tests mock the provider request; they do not need a real API key or make paid model calls.
+The adapter uses Groq's OpenAI-compatible chat-completions endpoint. It sends the system instruction, the current message, and up to 20 prior user/assistant messages. Provider errors and credentials are not returned to API clients. Automated tests should not need a real API key or make paid model calls.
 
 ## Conversation memory
-Conversations are stored in SQLite. Set `ADAPTIVE_AI_DB_PATH` to choose the database file location; the default is `adaptive_ai.sqlite3` in the backend working directory. Keep this file on persistent storage for a hosted deployment and protect backups because it contains conversation text. Endpoints let the client create/list conversations, read message history, and delete a conversation. Chat requests can include `conversation_id` to continue a thread; omit it to start a new one.
+The store uses PostgreSQL when `DATABASE_URL` is set and SQLite for local development otherwise. PostgreSQL URLs beginning with `postgres://` or `postgresql://` are normalized to the psycopg v3 driver. For hosted deployment, configure `DATABASE_URL` to a dedicated Adaptive AI PostgreSQL database; do not reuse databases belonging to other applications. If no `DATABASE_URL` is set, SQLite defaults to `adaptive_ai.sqlite3` or the path in `ADAPTIVE_AI_DB_PATH`. Render's free filesystem is ephemeral, so SQLite there is not durable. Protect database access and backups because they contain conversation text.
+
+Endpoints let the client create/list conversations, read message history, and delete a conversation. Chat requests can include `conversation_id` to continue a thread; omit it to start a new one.
 
 ## Production API protection
-When `APP_ENV=production`, every `/v1/*` route requires `Authorization: Bearer <ADAPTIVE_AI_API_TOKEN>`. Configure `ADAPTIVE_AI_API_TOKEN` as a long, random secret in the hosting provider's secret settings. If it is missing, API routes fail closed. `/health` remains public for health checks.
+Production is the safe default when `APP_ENV` is omitted. When `APP_ENV=production`, every `/v1/*` route requires `Authorization: Bearer <ADAPTIVE_AI_API_TOKEN>`. Configure `ADAPTIVE_AI_API_TOKEN` as a long, random secret in the hosting provider's secret settings. If it is missing, API routes fail closed with HTTP 503. Invalid or absent bearer tokens receive HTTP 401. `/health` and the service landing page remain public.
 
-This is a starter single-token guard, not full user authentication. **Rate limiting, account-level identity, and production abuse controls are still pending. Do not expose this prototype publicly until those controls are implemented.**
+This is a starter single-token guard, not full user authentication. **Rate limiting, account-level identity, and production abuse controls are still pending. Do not treat this prototype as a finished public multi-user service.**
 
 ## API endpoints
 - `GET /health` — health check.
@@ -56,8 +58,8 @@ pytest -q
 
 ## Roadmap
 1. Service skeleton, calculator allowlist, and tests.
-2. Groq chat provider adapter and bounded chat endpoint (implemented; requires a privately configured Groq API key).
-3. SQLite conversation history (implemented for single-user MVP); then user-controlled long-term memory and stronger account authentication.
+2. Groq chat provider adapter and bounded chat endpoint (implemented; live provider connectivity must be verified on the deployed service).
+3. SQLite/PostgreSQL conversation storage; hosted PostgreSQL must be configured for durable history.
 4. Sandboxed plugin generation, validation, staged activation, and rollback.
 5. Limited Android-native integrations with user-granted permissions.
 6. Deployment hardening, monitoring, backups, rate limiting, and recovery.

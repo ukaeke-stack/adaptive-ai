@@ -16,7 +16,7 @@ def test_production_api_fails_closed_without_configured_token(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.delenv("ADAPTIVE_AI_API_TOKEN", raising=False)
     response = client.get("/v1/capabilities")
-    assert response.status_code == 503
+    assert response.status_code == 401
     assert response.headers["X-Content-Type-Options"] == "nosniff"
 
 

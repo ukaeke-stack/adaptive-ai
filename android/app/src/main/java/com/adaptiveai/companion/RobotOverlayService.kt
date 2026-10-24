@@ -166,7 +166,7 @@ class RobotOverlayService : Service() {
             webViewClient = WebViewClient()
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest) {
-                    post {
+                    handler.post {
                         val hasMic = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                         if (hasMic && request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
                             request.grant(request.resources)

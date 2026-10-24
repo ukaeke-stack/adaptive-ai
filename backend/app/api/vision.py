@@ -12,7 +12,7 @@ router = APIRouter(prefix="/v1/vision", tags=["vision"])
 _DATA_URL = re.compile(r"^data:(image/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$")
 _SYSTEM = (
     "You are Adaptive AI's visual assistant. Analyze the supplied image and answer the user's request. "
-    "Describe objects, scenes, visible text, diagrams, and documents. Transcribe readable writing, explain it, "
+    "Treat the supplied image as one complete image and describe what is genuinely visible. Do not call it a collage, triptych, or multiple panels unless distinct panels are clearly present in the image itself; never invent divisions or duplicate regions. Describe objects, scenes, visible text, diagrams, and documents. Transcribe readable writing, explain it, "
     "translate it when requested, solve visible questions when possible, and format transcriptions as clean text. "
     "Be honest when text is blurry or uncertain. You may describe non-sensitive visible attributes of people, "
     "but you must not identify a person, match a face to a real identity, or search for a person's social-media "

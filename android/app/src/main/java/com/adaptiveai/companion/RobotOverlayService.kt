@@ -157,8 +157,8 @@ class RobotOverlayService : Service() {
                 setPadding(dp(12), dp(8), dp(12), dp(8))
                 setLineSpacing(1f, 1.08f)
             }
-            scroll.addView(reply, ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
+            scroll.addView(reply, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ))
             val root = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL

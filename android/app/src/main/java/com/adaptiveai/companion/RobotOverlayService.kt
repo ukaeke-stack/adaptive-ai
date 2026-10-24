@@ -27,6 +27,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import kotlin.math.max
@@ -37,6 +38,9 @@ class RobotOverlayService : Service() {
     private var robotParams: WindowManager.LayoutParams? = null
     private var panel: LinearLayout? = null
     private var panelParams: WindowManager.LayoutParams? = null
+    private var miniWebView: WebView? = null
+    private var responseText: TextView? = null
+    private var responseScroll: ScrollView? = null
     private var speechBridge: AndroidSpeechBridge? = null
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0
@@ -147,28 +151,28 @@ class RobotOverlayService : Service() {
         if (panel != null) return
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(7, 17, 31))
-            elevation = 14f
+            elevation = 12f
+            visibility = View.GONE
         }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(10, 6, 6, 6)
-            setBackgroundColor(Color.rgb(18, 37, 59))
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(Color.rgb(7, 17, 31))
         }
-        val title = TextView(this).apply {
-            text = "Norah voice chat"
-            textSize = 15f
-            setTextColor(Color.WHITE)
+        val reply = TextView(this).apply {
+            text = ""
+            textSize = 14f
+            setTextColor(Color.rgb(237, 245, 255))
+            setPadding(12, 8, 12, 8)
+            setLineSpacing(1f, 1.08f)
         }
-        val close = Button(this).apply {
-            text = "Hide"
-            setOnClickListener { hideChatPanel() }
-        }
-        header.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(close)
+        scroll.addView(reply, ScrollView.LayoutParams(
+            ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
+        ))
+
         val miniWeb = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -181,7 +185,10 @@ class RobotOverlayService : Service() {
                     super.onPageFinished(view, url)
                     if (pendingListenOnOpen) {
                         pendingListenOnOpen = false
-                        view?.evaluateJavascript("window.NorahStartListening && window.NorahStartListening()", null)
+                        view?.evaluateJavascript(
+                            "((window.NorahReady || Promise.resolve()).then(function(){if(window.NorahStartListening)window.NorahStartListening();}))",
+                            null
+                        )
                     }
                 }
             }
@@ -201,45 +208,69 @@ class RobotOverlayService : Service() {
                     }
                 }
             }
-            loadUrl("https://adaptive-ai-huve.onrender.com/app/")
             alpha = 0f
         }
         speechBridge = AndroidSpeechBridge(this).also { bridge ->
             bridge.attachWebView(miniWeb)
+            bridge.overlayTextListener = { text ->
+                reply.text = text
+                root.visibility = View.VISIBLE
+                val dmNow = resources.displayMetrics
+                val widthNow = minOf((dmNow.widthPixels * 0.86f).toInt(), (320 * dmNow.density).toInt())
+                val heightNow = (88 * dmNow.density).toInt()
+                val robotP = robotParams
+                val screenHeight = dmNow.heightPixels
+                val below = (robotP?.y ?: (screenHeight / 3)) + (190 * dmNow.density).toInt()
+                val yNow = if (below + heightNow < screenHeight) below else ((robotP?.y ?: 0) - heightNow).coerceAtLeast(12)
+                panelParams?.let { lp ->
+                    lp.width = widthNow
+                    lp.height = heightNow
+                    lp.x = ((robotP?.x ?: ((dmNow.widthPixels - widthNow) / 2))).coerceIn(0, (dmNow.widthPixels - widthNow).coerceAtLeast(0))
+                    lp.y = yNow.coerceIn(12, (screenHeight - heightNow).coerceAtLeast(12))
+                    try { wm.updateViewLayout(root, lp) } catch (_: Exception) {}
+                }
+                responseScroll?.post { responseScroll?.smoothScrollTo(0, reply.bottom) }
+            }
             miniWeb.addJavascriptInterface(bridge, "AdaptiveNative")
         }
-        val status = TextView(this).apply {
-            text = "Voice chat is ready. Speak after tapping the robot. Norah will reply aloud."
-            textSize = 13f
-            setTextColor(Color.rgb(220, 235, 248))
-            setPadding(12, 8, 12, 12)
-        }
-        root.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        root.addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (88 * resources.displayMetrics.density).toInt()
+        ))
         root.addView(miniWeb, LinearLayout.LayoutParams(1, 1))
+        responseText = reply
+        responseScroll = scroll
+        miniWebView = miniWeb
+
         val dm = resources.displayMetrics
         val width = minOf((dm.widthPixels * 0.86f).toInt(), (320 * dm.density).toInt())
-        val height = (104 * dm.density).toInt()
+        val height = (88 * dm.density).toInt()
         val lp = WindowManager.LayoutParams(
             width, height, type,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = ((dm.widthPixels - width) / 2).coerceAtLeast(0)
-            y = (dm.heightPixels * 0.12f).toInt()
+            x = ((robotParams?.x ?: ((dm.widthPixels - width) / 2))).coerceIn(0, (dm.widthPixels - width).coerceAtLeast(0))
+            y = ((robotParams?.y ?: (dm.heightPixels / 3)) + (190 * dm.density).toInt())
+                .coerceIn(12, (dm.heightPixels - height).coerceAtLeast(12))
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
         panel = root
         panelParams = lp
-        try { wm.addView(root, lp) } catch (e: Exception) {
+        try {
+            wm.addView(root, lp)
+            miniWeb.loadUrl("https://adaptive-ai-huve.onrender.com/app/")
+        } catch (e: Exception) {
             panel = null; panelParams = null
-            Toast.makeText(this, "Could not open floating chat. Check the display-over-other-apps permission.", Toast.LENGTH_LONG).show()
+            miniWebView = null; responseText = null; responseScroll = null
+            Toast.makeText(this, "Could not start floating voice chat. Check display-over-other-apps permission.", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun startPanelListening() {
-        val web = panel?.getChildAt(2) as? WebView ?: return
+        val web = miniWebView ?: return
+        panel?.visibility = View.GONE
+        responseText?.text = ""
         web.evaluateJavascript("window.NorahStartListening && window.NorahStartListening()", null)
     }
 
@@ -247,12 +278,15 @@ class RobotOverlayService : Service() {
         pendingListenOnOpen = false
         val p = panel
         if (p != null) {
-            try { (p.getChildAt(2) as? WebView)?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() }; wm.removeView(p) } catch (_: Exception) {}
+            try { miniWebView?.apply { stopLoading(); removeJavascriptInterface("AdaptiveNative"); destroy() }; wm.removeView(p) } catch (_: Exception) {}
             speechBridge?.close()
             speechBridge = null
         }
         panel = null
         panelParams = null
+        miniWebView = null
+        responseText = null
+        responseScroll = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY

@@ -53,6 +53,47 @@ def _ensure_schema(engine: Engine) -> None:
                 updated_at TEXT NOT NULL
             )
         """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS adaptive_users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                full_name TEXT NOT NULL,
+                phone TEXT,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('owner', 'user')),
+                phone_verified INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        """))
+        connection.execute(text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS adaptive_one_owner
+            ON adaptive_users(role) WHERE role = 'owner'
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS adaptive_sessions (
+                token_hash TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES adaptive_users(id) ON DELETE CASCADE,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS adaptive_recovery_codes (
+                user_id TEXT PRIMARY KEY REFERENCES adaptive_users(id) ON DELETE CASCADE,
+                code_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS adaptive_phone_otps (
+                user_id TEXT PRIMARY KEY REFERENCES adaptive_users(id) ON DELETE CASCADE,
+                code_hash TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        """))
         connection.execute(text(f"""
             CREATE TABLE IF NOT EXISTS messages (
                 id {message_id},

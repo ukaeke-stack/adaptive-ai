@@ -159,6 +159,7 @@ function speakReply(text){
 }
 if('speechSynthesis'in window){window.speechSynthesis.getVoices();window.speechSynthesis.onvoiceschanged=()=>window.speechSynthesis.getVoices()}
 function setBusy(v){busy=v;sendButton.disabled=v;input.disabled=v;setState(v?'thinking':'idle',v?'Thinking…':'Ready when you are',v?'Working on your message.':'Type a message or use your microphone to speak.')}
+function showOverlayResponse(text){const native=window.AdaptiveNative;if(native&&typeof native.showOverlayText==='function'){try{native.showOverlayText(String(text||''))}catch(e){}}}
 async function sendMessage(raw){
  const message=raw.trim();if(!message||busy)return;
  errorText.textContent='';
@@ -169,9 +170,9 @@ async function sendMessage(raw){
   const data=await response.json().catch(()=>({detail:'The server returned an unreadable response.'}));
   if(!response.ok){let msg=data.detail||('Request failed ('+response.status+').');if(response.status===401)msg='Your session has expired or you are not signed in. Sign in again.';if(response.status===503)msg='The account service or AI provider is not configured. Check service settings.';throw new Error(msg)}
   if(typeof data.reply!=='string'||!data.reply.trim())throw new Error('The API returned no assistant reply.');
-  conversationId=data.conversation_id||conversationId;addBubble('assistant',data.reply);connectionLabel.textContent='Connected · conversation active';
+  conversationId=data.conversation_id||conversationId;addBubble('assistant',data.reply);showOverlayResponse(data.reply);connectionLabel.textContent='Connected · conversation active';
   if(voiceReplies&&(('speechSynthesis'in window)||(window.AdaptiveNative&&typeof window.AdaptiveNative.speak==='function'))){speakReply(data.reply)}
- }catch(e){errorText.textContent=e.message||'Unable to reach Norah.';connectionLabel.textContent='Connection needs attention';setState('error','Could not complete request','Check your connection, then try again.')}
+ }catch(e){errorText.textContent=e.message||'Unable to reach Norah.';showOverlayResponse(e.message||'Unable to reach Norah.');connectionLabel.textContent='Connection needs attention';setState('error','Could not complete request','Check your connection, then try again.')}
  finally{setBusy(false);if('speechSynthesis' in window&&window.speechSynthesis.speaking&&voiceReplies)setState('speaking','Speaking…','Reading the answer aloud.');input.focus()}
 }
 function makeRecoveryCode(){const b=new Uint8Array(32);crypto.getRandomValues(b);return Array.from(b,x=>x.toString(16).padStart(2,'0')).join('')}
@@ -193,7 +194,7 @@ document.querySelectorAll('input[type="password"]').forEach((field)=>{
  toggle.innerHTML=eye;toggle.addEventListener('click',()=>{const show=field.type==='password';field.type=show?'text':'password';toggle.innerHTML=show?hiddenEye:eye;toggle.setAttribute('aria-label',show?'Hide password':'Show password');toggle.setAttribute('aria-pressed',String(show));});
  wrap.appendChild(toggle);
 });
-checkSession();
+window.NorahReady=checkSession();
 sendButton.addEventListener('click',()=>sendMessage(input.value));
 input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage(input.value)}});
 $('newChat').addEventListener('click',()=>{conversationId=null;log.replaceChildren();const empty=document.createElement('div');empty.id='emptyState';empty.className='empty';const strong=document.createElement('strong');strong.textContent='New conversation';empty.append(strong,document.createTextNode('Ask a question by typing or speaking.'));log.appendChild(empty);errorText.textContent='';connectionLabel.textContent='New conversation ready';if('speechSynthesis' in window)window.speechSynthesis.cancel();setState('idle','Ready when you are','Your next message will start a new conversation.')});

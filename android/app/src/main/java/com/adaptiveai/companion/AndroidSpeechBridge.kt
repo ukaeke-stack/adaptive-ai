@@ -10,6 +10,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONObject
@@ -24,6 +25,9 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
     @Volatile private var webView: WebView? = null
     private var recognizer: SpeechRecognizer? = null
     @Volatile private var listening = false
+    @Volatile var overlayTextListener: ((String) -> Unit)? = null
+    @Volatile var overlayTextProgressListener: ((Float) -> Unit)? = null
+    @Volatile private var speakingLength = 1
     private lateinit var engine: TextToSpeech
 
     init {
@@ -34,6 +38,17 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
             pendingText = null
             if (engineReady && queued != null) speakNow(queued)
         }
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) {
+                mainHandler.post { overlayTextProgressListener?.invoke(1f) }
+            }
+            override fun onError(utteranceId: String?) {}
+            override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
+                val progress = (end.toFloat() / speakingLength.coerceAtLeast(1)).coerceIn(0f, 1f)
+                mainHandler.post { overlayTextProgressListener?.invoke(progress) }
+            }
+        })
         if (SpeechRecognizer.isRecognitionAvailable(appContext)) {
             mainHandler.post {
                 recognizer = SpeechRecognizer.createSpeechRecognizer(appContext).apply {
@@ -87,6 +102,13 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Microphone is busy. Wait a moment and tap again."
         SpeechRecognizer.ERROR_SERVER -> "Android speech recognition is temporarily unavailable."
         else -> "Voice input failed (error $error). Tap the microphone and try again."
+    }
+
+    @JavascriptInterface
+    fun showOverlayText(text: String?) {
+        val safe = text?.take(12000)?.trim().orEmpty()
+        if (safe.isEmpty()) return
+        mainHandler.post { overlayTextListener?.invoke(safe) }
     }
 
     @JavascriptInterface
@@ -156,8 +178,10 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
         return engine.setLanguage(selected) >= TextToSpeech.LANG_AVAILABLE
     }
 
-    private fun speakNow(text: String): Boolean =
-        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "norah-reply") == TextToSpeech.SUCCESS
+    private fun speakNow(text: String): Boolean {
+        speakingLength = text.length.coerceAtLeast(1)
+        return engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "norah-reply") == TextToSpeech.SUCCESS
+    }
 
     @JavascriptInterface
     fun speak(text: String?): Boolean {
@@ -189,5 +213,7 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
             initializationComplete = true
         }
         webView = null
+        overlayTextListener = null
+        overlayTextProgressListener = null
     }
 }

@@ -1,6 +1,7 @@
 package com.adaptiveai.companion
 
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -18,6 +19,7 @@ import android.widget.Toast
 
 class MainActivity : Activity() {
     private lateinit var web: WebView
+    private var pendingMediaPermission: android.webkit.PermissionRequest? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF07111F.toInt()) }
@@ -33,7 +35,12 @@ class MainActivity : Activity() {
             webViewClient = WebViewClient()
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
-                    runOnUiThread { request.grant(request.resources) }
+                    runOnUiThread {
+                        if (request.resources.contains(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) request.grant(request.resources)
+                            else { pendingMediaPermission = request; requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 902) }
+                        } else request.deny()
+                    }
                 }
             }
             loadUrl("https://adaptive-ai-huve.onrender.com/app/")
@@ -51,6 +58,13 @@ class MainActivity : Activity() {
         val intent = Intent(this, RobotOverlayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
         Toast.makeText(this, "Robot overlay enabled. It can remain visible over other apps while Android allows the service to run.", Toast.LENGTH_LONG).show()
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 902) {
+            val request = pendingMediaPermission; pendingMediaPermission = null
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) request?.grant(request.resources) else request?.deny()
+        }
     }
     override fun onBackPressed() {
         if (::web.isInitialized && web.canGoBack()) web.goBack() else super.onBackPressed()

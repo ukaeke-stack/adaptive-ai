@@ -1,6 +1,7 @@
 package com.adaptiveai.companion
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.webkit.JavascriptInterface
 import java.util.Locale
@@ -22,11 +23,17 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
     }
 
     private fun configureLanguage(): Boolean {
-        val nigerianEnglish = Locale("en", "NG")
-        val usEnglish = Locale.US
-        val preferredAvailable = engine.isLanguageAvailable(nigerianEnglish) >= TextToSpeech.LANG_AVAILABLE
-        val selected = if (preferredAvailable) nigerianEnglish else usEnglish
-        if (engine.isLanguageAvailable(selected) < TextToSpeech.LANG_AVAILABLE) return false
+        // Explicitly route spoken replies through the normal media/speech output.
+        engine.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
+        val candidates = listOf(Locale("en", "NG"), Locale.UK, Locale.US, Locale.getDefault())
+        val selected = candidates.firstOrNull {
+            engine.isLanguageAvailable(it) >= TextToSpeech.LANG_AVAILABLE
+        } ?: return false
         return engine.setLanguage(selected) >= TextToSpeech.LANG_AVAILABLE
     }
 

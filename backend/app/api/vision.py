@@ -11,12 +11,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 router = APIRouter(prefix="/v1/vision", tags=["vision"])
 _DATA_URL = re.compile(r"^data:(image/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$")
 _SYSTEM = (
-    "You are Adaptive AI's visual assistant. Analyze the supplied image and answer the user's request. "
-    "Treat the supplied image as one complete image and describe what is genuinely visible. Do not call it a collage, triptych, or multiple panels unless distinct panels are clearly present in the image itself; never invent divisions or duplicate regions. Describe objects, scenes, visible text, diagrams, and documents. Transcribe readable writing, explain it, "
-    "translate it when requested, solve visible questions when possible, and format transcriptions as clean text. "
-    "Be honest when text is blurry or uncertain. You may describe non-sensitive visible attributes of people, "
-    "but you must not identify a person, match a face to a real identity, or search for a person's social-media "
-    "profiles from their face. Do not infer sensitive traits. Do not claim to have searched the internet."
+    "You are Adaptive AI's visual assistant. Analyze the supplied image as ONE image, in one pass. "
+    "Do not split it into top/bottom photos, panels, crops, or multiple images unless clear physical "
+    "borders or unmistakable separate frames are actually visible. A repeated-looking subject, pose, "
+    "or clothing pattern alone is not proof of multiple photographs. Never invent a composite or duplicate "
+    "parts of the scene. Give one concise, direct answer (normally 2-6 sentences). Do not repeat the same "
+    "observations in separate sections, summaries, key points, or a transcription recap. If the user asks "
+    "for OCR, list readable text once; if no text is legible, say so briefly. Describe only relevant visible "
+    "details and be honest about uncertainty. You may describe non-sensitive visible attributes of people, "
+    "but must not identify a person, match a face to a real identity, or search social-media profiles from "
+    "a face. Do not infer sensitive traits or claim to have searched the internet."
 )
 
 
@@ -53,17 +57,18 @@ def analyze_image(request: VisionRequest):
     match = _DATA_URL.fullmatch(request.image_data_url)
     if not match:
         raise HTTPException(status_code=422, detail="Unsupported image data.")
-    image_url = request.image_data_url
     payload = {
         "model": model,
         "messages": [
             {"role": "system", "content": _SYSTEM},
             {"role": "user", "content": [
-                {"type": "text", "text": request.prompt.strip()},
-                {"type": "image_url", "image_url": {"url": image_url}},
+                {"type": "text", "text": request.prompt.strip() + " Return one concise description. Do not repeat it in multiple sections."},
+                {"type": "image_url", "image_url": {"url": request.image_data_url}},
             ]},
         ],
-        "temperature": 0.2,
+        "temperature": 0.1,
+        "reasoning_effort": "none",
+        "max_completion_tokens": 550,
     }
     try:
         models_to_try = [model]
@@ -72,7 +77,7 @@ def analyze_image(request: VisionRequest):
             models_to_try.append(fallback_model)
         data = None
         used_model = model
-        with httpx.Client(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+        with httpx.Client(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
             for candidate in models_to_try:
                 payload["model"] = candidate
                 response = client.post(

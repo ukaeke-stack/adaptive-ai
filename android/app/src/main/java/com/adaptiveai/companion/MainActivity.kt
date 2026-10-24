@@ -65,18 +65,17 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
     }
     private fun enableOverlay() {
-        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 903)
-            Toast.makeText(this, "Allow microphone access so voice chat can work in the floating panel.", Toast.LENGTH_LONG).show()
-            return
-        }
         if (!Settings.canDrawOverlays(this)) {
             startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")), 901)
-            Toast.makeText(this, "Allow Adaptive AI to display over other apps, then return here and tap Enable roaming robot again.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Allow Adaptive AI to display over other apps. The floating robot will start when you return.", Toast.LENGTH_LONG).show()
             return
         }
         startRobotService()
-        Toast.makeText(this, "Robot overlay enabled. It can remain visible over other apps while Android allows the service to run.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Floating robot enabled. It should remain available over other apps while Android allows the foreground service to run.", Toast.LENGTH_LONG).show()
+    }
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 901 && Settings.canDrawOverlays(this)) startRobotService()
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

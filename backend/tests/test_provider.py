@@ -23,8 +23,19 @@ def test_groq_defaults_and_request_are_correct(monkeypatch):
     assert captured["authorization"] == "Bearer test-groq-secret"
     assert captured["payload"]["model"] == "openai/gpt-oss-20b"
     assert captured["payload"]["messages"][-1] == {"role": "user", "content": "Hello"}
+    system_prompt = captured["payload"]["messages"][0]["content"]
+    assert "respond to what the user actually said" in system_prompt
+    assert "I do not receive raw microphone audio" not in system_prompt
     assert "test-groq-secret" not in json.dumps(captured["payload"])
     client.close()
+
+
+def test_direct_voice_check_is_natural_and_does_not_need_provider(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    reply = provider.generate_reply("Can you hear me?")
+    assert "ready to respond" in reply
+    assert "raw microphone audio" not in reply
+    assert "only read text" not in reply
 
 
 def test_missing_groq_key_fails_without_network(monkeypatch):

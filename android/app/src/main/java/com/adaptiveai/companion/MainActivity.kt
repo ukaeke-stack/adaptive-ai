@@ -53,7 +53,7 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            loadUrl("https://adaptive-ai-huve.onrender.com/app/")
+            loadUrl("https://adaptive-ai-huve.onrender.com/app/?native=1")
         }
         speechBridge.attachWebView(web)
         root.addView(bar)

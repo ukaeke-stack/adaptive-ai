@@ -14,6 +14,7 @@
 
 #floatingCompanion{position:fixed;z-index:9999;left:8px;top:38%;width:100px;height:190px;display:none;touch-action:none;user-select:none;cursor:grab;filter:drop-shadow(0 10px 18px #0008)}
 #floatingCompanion.visible{display:block}#floatingCompanion:active{cursor:grabbing}
+body.overlay-mode{background:transparent!important;min-height:0!important;width:100vw;height:100vh;overflow:hidden!important}body.overlay-mode .shell{display:none!important}body.overlay-mode #floatingCompanion{left:0!important;top:0!important;width:100px!important;height:190px!important;display:block!important;filter:none!important;cursor:pointer!important}body.overlay-mode #floatingCompanion .fc-caption{display:none!important}
 #floatingCompanion .fc-orb{position:absolute;inset:0;border-radius:50%;background:radial-gradient(ellipse at center,#61e6ef12,transparent 70%);pointer-events:none}
 #floatingCompanion .fc-bot{position:absolute;left:8px;top:3px;width:84px;height:176px;animation:fc-walk 1s ease-in-out infinite}
 #floatingCompanion .fc-antenna{position:absolute;left:40px;top:0;width:4px;height:12px;background:#61e6ef;border-radius:5px}
@@ -99,6 +100,8 @@ input,textarea,button{font:inherit}input,textarea{background:#091629;border:1px 
 
 <script>
 (() => {
+const overlayMode = new URLSearchParams(window.location.search).get('overlay') === '1';
+if (overlayMode) document.body.classList.add('overlay-mode');
 const $ = id => document.getElementById(id);
 const panel=$('robotPanel'), stateLabel=$('stateLabel'), stateDetail=$('stateDetail'), log=$('chatLog'), input=$('messageInput'), errorText=$('errorText'), sendButton=$('sendButton'), micButton=$('micButton'), connectionLabel=$('connectionLabel');
 let conversationId=null, busy=false, voiceReplies=true, recognition=null, listening=false, voiceTranscript="", cancelVoiceAutoSend=false, authenticated=false, handsFreeEnabled=false, voicePauseTimer=null;
@@ -207,7 +210,7 @@ window.NorahNativeVoice={
  onListening:()=>{nativeListening=true;micButton.classList.add('active');micButton.textContent='■';setState('listening','Listening…','Speak naturally. Norah sends your message when you finish.')},
  onPartial:text=>{if(text)stateDetail.textContent='Hearing: '+text},
  onResult:text=>{nativeListening=false;micButton.classList.remove('active');micButton.textContent='🎙';if(text&&text.trim()){input.value='';sendMessage(text.trim())}else setState('idle','Ready when you are','Tap the microphone to speak again.')},
- onError:message=>{nativeListening=false;micButton.classList.remove('active');micButton.textContent='🎙';errorText.textContent=message||'Voice input failed.';setState('error','Microphone unavailable',message||'Tap the microphone and try again.')},
+ onError:message=>{nativeListening=false;micButton.classList.remove('active');micButton.textContent='🎙';errorText.textContent=message||'Voice input failed.';setState('error','Microphone unavailable',message||'Tap the microphone and try again.');if(overlayMode)showOverlayResponse(message||'Microphone unavailable. Tap Norah to try again.')},
  onStopped:()=>{nativeListening=false;micButton.classList.remove('active');micButton.textContent='🎙';setState('idle','Ready when you are','Listening stopped. Tap the microphone to speak again.')}
 };
 function activateFloatingRobot(){
@@ -228,7 +231,7 @@ function activateFloatingRobot(){
 }
 window.NorahStartListening=activateFloatingRobot;
 function placeFloatingRobot(now=0){if(!floatEnabled)return;if(!dragging){const maxX=Math.max(0,window.innerWidth-110),maxY=Math.max(12,window.innerHeight-205);floatX+=floatVX;floatY+=floatVY;if(floatX>=maxX){floatX=maxX;floatVX=-Math.abs(floatVX)}if(floatX<=0){floatX=0;floatVX=Math.abs(floatVX)}if(floatY>=maxY){floatY=maxY;floatVY=-Math.abs(floatVY)}if(floatY<=12){floatY=12;floatVY=Math.abs(floatVY)}if(now-lastRoamChange>2600){floatVX=Math.max(-1.5,Math.min(1.5,floatVX+(Math.random()-.5)*.65));floatVY=Math.max(-1.1,Math.min(1.1,floatVY+(Math.random()-.5)*.45));lastRoamChange=now}floatingCompanion.style.left=floatX+'px';floatingCompanion.style.top=floatY+'px'}requestAnimationFrame(placeFloatingRobot)}
-requestAnimationFrame(placeFloatingRobot);
+if(!overlayMode)requestAnimationFrame(placeFloatingRobot);
 floatToggle.addEventListener('click',()=>{floatEnabled=!floatEnabled;floatingCompanion.classList.toggle('visible',floatEnabled);floatToggle.textContent='Floating robot: '+(floatEnabled?'on':'off');if(floatEnabled){floatX=Math.min(floatX,Math.max(0,window.innerWidth-105));requestAnimationFrame(placeFloatingRobot)}});
 floatingCompanion.addEventListener('pointerdown',e=>{dragging=true;pointerMoved=false;dragPointerOrigin={x:e.clientX,y:e.clientY};dragStart={x:e.clientX-floatX,y:e.clientY-floatY};floatingCompanion.setPointerCapture(e.pointerId)});
 floatingCompanion.addEventListener('pointermove',e=>{if(!dragging||!dragStart)return;if(dragPointerOrigin&&Math.hypot(e.clientX-dragPointerOrigin.x,e.clientY-dragPointerOrigin.y)>9)pointerMoved=true;if(!pointerMoved)return;floatX=Math.max(0,Math.min(window.innerWidth-105,e.clientX-dragStart.x));floatY=Math.max(0,Math.min(window.innerHeight-205,e.clientY-dragStart.y));floatingCompanion.style.left=floatX+'px';floatingCompanion.style.top=floatY+'px'});

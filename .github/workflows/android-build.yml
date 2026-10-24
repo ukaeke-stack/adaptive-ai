@@ -2,9 +2,6 @@ name: Android companion build
 on:
   push:
     branches: [main, feature/android-roaming-companion-continuous-voice]
-    paths:
-      - "android/**"
-      - ".github/workflows/android-build.yml"
   pull_request:
     paths:
       - "android/**"

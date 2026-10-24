@@ -31,6 +31,7 @@ import android.widget.TextView
 import android.widget.Toast
 import kotlin.math.max
 
+// Keep the overlay WebView on the authenticated app origin; its page refreshes the shared session before listening.
 class RobotOverlayService : Service() {
     private lateinit var wm: WindowManager
     private var robotWeb: WebView? = null

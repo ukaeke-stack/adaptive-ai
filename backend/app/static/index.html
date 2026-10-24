@@ -215,7 +215,6 @@ function activateFloatingRobot(){
  if(native&&typeof native.startListening==='function'){
   if(nativeListening){native.stopListening();return}
   handsFreeEnabled=false;cancelVoiceAutoSend=false;
-  speakReply('Hi there! I’m here and ready to listen. Go ahead, I’m listening.');
   setState('listening','Getting ready to listen…','Speak after the microphone activates.');
   try{native.startListening()}catch(e){errorText.textContent='Could not start the microphone. Tap again.'}
   return

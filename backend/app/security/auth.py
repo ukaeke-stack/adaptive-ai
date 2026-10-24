@@ -16,7 +16,7 @@ from app.security.sessions import current_user
 
 _RATE_WINDOW_SECONDS = 60.0
 _RATE_LIMIT = 60
-_MAX_BODY_BYTES = 64 * 1024
+_MAX_BODY_BYTES = 10 * 1024 * 1024
 _MAX_TRACKED_CLIENTS = 5000
 _AUTH_RATE_LIMIT = 10
 _requests_by_client: dict[str, deque[float]] = {}

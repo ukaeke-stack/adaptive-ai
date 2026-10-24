@@ -4,6 +4,16 @@ from app.main import app
 client = TestClient(app)
 
 
+def test_root_returns_service_info():
+    response = client.get("/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["service"] == "Adaptive AI API"
+    assert data["status"] == "online"
+    assert data["health"] == "/health"
+    assert data["docs"] == "/docs"
+
+
 def test_health_returns_ok():
     response = client.get("/health")
     assert response.status_code == 200

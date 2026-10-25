@@ -57,7 +57,7 @@ def _validate_steps(steps: list[dict]) -> list[dict]:
         if not isinstance(step, dict) or set(step) - {"type", "input", "title", "due_at", "notes"}:
             raise HTTPException(status_code=422, detail="Each workflow step may contain only type, input, title, due_at, and notes.")
         kind = step.get("type")
-        if kind not in _ALLOWED_STEP_TYPES:
+        if not isinstance(kind, str) or kind not in _ALLOWED_STEP_TYPES:
             raise HTTPException(status_code=422, detail="Unsupported workflow step type.")
         if kind in {"summarize_text", "draft_message"}:
             value = step.get("input", "")

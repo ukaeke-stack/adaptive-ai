@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import json
 import re
+from io import BytesIO
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
+from pypdf import PdfReader
 
 from app.memory.store import _ready_engine
 from app.security.sessions import require_user
@@ -143,6 +145,40 @@ def delete_reminder(reminder_id: str, request: Request):
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Reminder not found.")
     return {"deleted": True, "id": reminder_id}
+
+
+@router.post("/documents/extract-pdf")
+async def extract_pdf(request: Request, file: UploadFile = File(...)):
+    require_user(request)
+    if file.content_type not in {"application/pdf", "application/octet-stream"}:
+        raise HTTPException(status_code=415, detail="Upload a PDF document.")
+    data = await file.read(10 * 1024 * 1024 + 1)
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF must be 10 MB or smaller.")
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=415, detail="The uploaded file is not a valid PDF.")
+    try:
+        reader = PdfReader(BytesIO(data), strict=False)
+        if reader.is_encrypted:
+            raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported.")
+        if len(reader.pages) > 200:
+            raise HTTPException(status_code=413, detail="PDFs are limited to 200 pages.")
+        parts = []
+        remaining = 100000
+        for page in reader.pages:
+            if remaining <= 0:
+                break
+            page_text = page.extract_text() or ""
+            parts.append(page_text[:remaining])
+            remaining -= len(page_text)
+        extracted = "\\n\\n".join(parts).strip()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Could not read this PDF. It may be damaged or use unsupported encoding.") from exc
+    return {"filename": (file.filename or "document.pdf")[:200], "page_count": len(reader.pages),
+            "text": extracted, "character_count": len(extracted),
+            "note": "Text extraction only. Scanned/image-only PDF pages require OCR and may return no text."}
 
 
 @router.post("/documents/analyze")

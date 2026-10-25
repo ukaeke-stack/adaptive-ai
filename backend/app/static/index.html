@@ -449,7 +449,8 @@ async function renderUpdates(){const data=await productivityRequest('/v1/updates
 document.getElementById('proposeUpdate')?.addEventListener('click',async()=>{try{const result=await productivityRequest('/v1/updates/proposals',{method:'POST',body:JSON.stringify({version:document.getElementById('updateVersion').value,source_revision:document.getElementById('updateRevision').value,artifact_sha256:document.getElementById('updateDigest').value,signature:document.getElementById('updateSignature').value.trim()})});document.getElementById('updateResults').textContent=JSON.stringify(result,null,2);await renderUpdates()}catch(e){productivityStatus(e.message)}});
 document.getElementById('loadUpdates')?.addEventListener('click',async()=>{try{await renderUpdates()}catch(e){productivityStatus(e.message)}});
 document.getElementById('rollbackPlan')?.addEventListener('click',async()=>{try{const result=await productivityRequest('/v1/updates/rollback-plan',{method:'POST'});document.getElementById('updateResults').textContent=JSON.stringify(result,null,2)}catch(e){productivityStatus(e.message)}});
-\nif(!navigator.onLine) productivityStatus('Offline: the cached app shell may open, but account data and API tools need an internet connection.');
+
+if(!navigator.onLine) productivityStatus('Offline: the cached app shell may open, but account data and API tools need an internet connection.');
 window.addEventListener('offline',()=>productivityStatus('You are offline. Private account data is not cached; reconnect to sync.'));
 window.addEventListener('online',()=>productivityStatus('Connection restored. Refresh reminders or workflows to load server data.'));
 })();

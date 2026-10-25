@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "android/**"
+      - "backend/app/static/index.html"
       - ".github/workflows/android-build.yml"
   workflow_dispatch:
 permissions:

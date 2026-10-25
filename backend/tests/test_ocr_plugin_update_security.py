@@ -102,3 +102,27 @@ def test_update_policy_never_claims_automatic_deployment(monkeypatch):
     assert response.status_code == 200
     assert response.json()["automatic_deployment"] is False
     assert response.json()["mode"] == "signed-release-approval-only"
+
+
+def test_ocr_processes_scanned_pdf_page_and_returns_text(monkeypatch):
+    monkeypatch.setattr(document_ocr, "require_user", lambda request: {"id": "test-user", "role": "owner"})
+    monkeypatch.setattr(document_ocr.pytesseract, "image_to_string", lambda image, timeout=20: "Recognized scanned text")
+    import fitz
+    pdf = fitz.open()
+    page = pdf.new_page(width=300, height=300)
+    page.insert_text((30, 40), "scan placeholder")
+    data = pdf.tobytes()
+    pdf.close()
+
+    response = client.post(
+        "/v1/assistant/documents/ocr-pdf",
+        files={"file": ("scanned.pdf", data, "application/pdf")},
+    )
+
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["filename"] == "scanned.pdf"
+    assert result["page_count"] == 1
+    assert result["processed_pages"] == 1
+    assert "Recognized scanned text" in result["text"]
+    assert result["method"] == "local-tesseract-ocr"

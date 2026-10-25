@@ -1,0 +1,58 @@
+name: Frontend syntax checks
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: ["feat/full-device-and-integrations"]
+jobs:
+  check-inline-javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Extract and syntax-check inline scripts
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.in_script = False
+                  self.current = []
+                  self.scripts = []
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "script":
+                      self.in_script = True
+                      self.current = []
+
+              def handle_data(self, data):
+                  if self.in_script:
+                      self.current.append(data)
+
+              def handle_endtag(self, tag):
+                  if tag == "script" and self.in_script:
+                      source = "".join(self.current).strip()
+                      if source:
+                          self.scripts.append(source)
+                      self.in_script = False
+
+          html = Path("backend/app/static/index.html").read_text(encoding="utf-8")
+          parser = Scripts()
+          parser.feed(html)
+          if not parser.scripts:
+              raise SystemExit("No inline JavaScript found")
+          out = Path("/tmp/norah-inline-js")
+          out.mkdir(exist_ok=True)
+          for index, source in enumerate(parser.scripts):
+              (out / f"script-{index}.js").write_text(source, encoding="utf-8")
+          print(f"Extracted {len(parser.scripts)} inline script(s)")
+          PY
+          for file in /tmp/norah-inline-js/*.js; do
+            echo "Checking $file"
+            node --check "$file"
+          done

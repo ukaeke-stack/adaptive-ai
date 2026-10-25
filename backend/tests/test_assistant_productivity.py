@@ -33,4 +33,5 @@ def test_productivity_routes_are_registered():
     schema = client.get("/openapi.json").json()
     assert "/v1/assistant/reminders" in schema["paths"]
     assert "/v1/assistant/documents/analyze" in schema["paths"]
+    assert "/v1/assistant/documents/extract-pdf" in schema["paths"]
     assert "/v1/assistant/workflows/{workflow_id}/preview" in schema["paths"]

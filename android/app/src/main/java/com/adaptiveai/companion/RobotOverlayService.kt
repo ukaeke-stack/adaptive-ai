@@ -207,6 +207,7 @@ class RobotOverlayService : Service() {
         speechBridge = AndroidSpeechBridge(this).also { bridge ->
             bridge.attachWebView(miniWeb)
             miniWeb.addJavascriptInterface(bridge, "AdaptiveNative")
+            miniWeb.addJavascriptInterface(AndroidDeviceActions(this@RobotOverlayService), "AdaptiveDevice")
         }
         val status = TextView(this).apply {
             text = "Voice chat is ready. Speak after tapping the robot. Norah will reply aloud."

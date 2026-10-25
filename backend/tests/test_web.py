@@ -55,3 +55,16 @@ def test_account_forms_include_owner_enrollment_and_recovery():
     assert "/v1/auth/login" in response.text
     assert "/v1/auth/recover" in response.text
     assert "ADAPTIVE_AI_API_TOKEN" not in response.text
+
+
+
+def test_productivity_tools_and_offline_fallback_are_present():
+    response = client.get("/app/")
+    assert response.status_code == 200
+    assert "productivityPanel" in response.text
+    assert "/v1/assistant/reminders" in response.text
+    assert "data-document-task" in response.text
+    assert "loadPermissions" in response.text
+    assert "saveSummaryWorkflow" in response.text
+    assert "navigator.serviceWorker.register('/app/service-worker.js')" in response.text
+    assert "No text was sent to the server." in response.text

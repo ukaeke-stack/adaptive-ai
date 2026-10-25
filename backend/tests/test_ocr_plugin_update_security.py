@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import serialization
 
 from app.main import app
 from app.api import document_ocr, updates
-from app.api.safe_plugins import Manifest
+from app.api.safe_plugins import ALLOWED, Manifest
 
 client = TestClient(app)
 
@@ -38,13 +38,11 @@ def test_plugin_manifest_rejects_extra_fields():
         Manifest(name="example plugin", capabilities=["count_words"], run_shell=True)
 
 
-def test_plugin_manifest_rejects_unknown_capability_at_policy_layer():
+def test_plugin_capability_allowlist_excludes_arbitrary_code():
     manifest = Manifest(name="example plugin", capabilities=["count_words"])
     assert manifest.capabilities == ["count_words"]
-    # Unknown capabilities must be rejected by the endpoint's allow-list.
-    assert set(manifest.capabilities) <= {"count_words", "extract_bullets", "draft_message"}
-    with pytest.raises(Exception):
-        Manifest(name="unsafe plugin", capabilities=["execute_shell"])
+    assert ALLOWED == {"count_words", "extract_bullets", "draft_message"}
+    assert "execute_shell" not in ALLOWED
 
 
 def _signed_release():

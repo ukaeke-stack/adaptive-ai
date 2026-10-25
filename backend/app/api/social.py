@@ -132,3 +132,34 @@ def disconnect(provider: str, request: Request):
  with _ready_engine().begin() as conn:
   result=conn.execute(text("DELETE FROM adaptive_social_tokens WHERE user_id=:uid AND provider=:provider"),{"uid":user["id"],"provider":provider})
  return {"disconnected":bool(result.rowcount),"provider":provider,"message":"Local tokens deleted. Revoke provider-side access in the provider's security settings if needed."}
+
+def _get_json(url, access_token):
+ req=urllib.request.Request(url,headers={"Accept":"application/json","Authorization":"Bearer "+access_token})
+ try:
+  with urllib.request.urlopen(req,timeout=12) as response: return json.loads(response.read(1_000_000))
+ except Exception as exc:
+  raise HTTPException(status_code=502,detail="The provider profile request failed. Reconnect the account if its token expired.") from exc
+
+@router.get("/{provider}/profile")
+def connected_profile(provider: str, request: Request):
+ user=require_user(request)
+ if provider not in PROVIDERS: raise HTTPException(status_code=404,detail="Unsupported social provider")
+ cipher=_fernet(); _ensure_tables()
+ with _ready_engine().connect() as conn:
+  row=conn.execute(text("SELECT token_ciphertext FROM adaptive_social_tokens WHERE user_id=:uid AND provider=:provider"),
+   {"uid":user["id"],"provider":provider}).mappings().first()
+ if not row: raise HTTPException(status_code=404,detail="This social account is not connected.")
+ try: token=json.loads(cipher.decrypt(row["token_ciphertext"].encode()).decode())
+ except Exception as exc: raise HTTPException(status_code=500,detail="Stored social token could not be decrypted. Contact the service administrator.") from exc
+ access=token.get("access_token","")
+ if provider=="instagram": data=_get_json("https://graph.instagram.com/me?fields=id,username",access)
+ elif provider=="facebook": data=_get_json("https://graph.facebook.com/me?fields=id,name",access)
+ elif provider=="x": data=_get_json("https://api.twitter.com/2/users/me?user.fields=name,username",access).get("data",{})
+ elif provider=="youtube":
+  data=_get_json("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",access)
+  items=data.get("items",[])
+  data={"channel_id":items[0].get("id"),"title":items[0].get("snippet",{}).get("title")} if items else {}
+ elif provider=="tiktok": data=_get_json("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,username",access).get("data",{}).get("user",{})
+ else: raise HTTPException(status_code=404,detail="Unsupported social provider")
+ safe={k:data[k] for k in ("id","username","name","display_name","open_id","channel_id","title") if isinstance(data,dict) and k in data}
+ return {"provider":provider,"connected":True,"profile":safe}

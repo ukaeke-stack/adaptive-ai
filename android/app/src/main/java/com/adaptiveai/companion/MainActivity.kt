@@ -33,6 +33,7 @@ class MainActivity : Activity() {
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             addJavascriptInterface(speechBridge, "AdaptiveNative")
+            addJavascriptInterface(AndroidDeviceActions(this@MainActivity), "AdaptiveDevice")
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = WebViewClient()
@@ -61,8 +62,15 @@ class MainActivity : Activity() {
         setContentView(root)
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 903)
-        } else if (Settings.canDrawOverlays(this)) {
-            startRobotService()
+        } else {
+            requestNotificationPermissionIfNeeded()
+            if (Settings.canDrawOverlays(this)) startRobotService()
+        }
+    }
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 904)
         }
     }
     private fun startRobotService() {
@@ -85,8 +93,13 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 903) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) enableOverlay()
-            else Toast.makeText(this, "Microphone permission is needed for floating voice chat. You can enable the robot later from this screen.", Toast.LENGTH_LONG).show()
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                requestNotificationPermissionIfNeeded()
+                enableOverlay()
+            } else Toast.makeText(this, "Microphone permission is needed for floating voice chat. You can enable the robot later from this screen.", Toast.LENGTH_LONG).show()
+        }
+        if (requestCode == 904 && grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Reminders can be saved, but notifications are disabled. Enable them in Android app settings.", Toast.LENGTH_LONG).show()
         }
         if (requestCode == 902) {
             val request = pendingMediaPermission; pendingMediaPermission = null

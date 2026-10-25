@@ -66,12 +66,59 @@ input,textarea,button{font:inherit}input,textarea{background:#091629;border:1px 
 <section class="panel robot-panel" id="robotPanel" data-state="idle" aria-live="polite">
 <div class="robot-wrap"><div class="halo"></div><div class="bot" aria-hidden="true"><div class="antenna"></div><div class="head"><div class="face"><span class="eye"></span><span class="eye"></span><span class="mouth"></span></div></div><div class="bodybot"></div></div></div>
 <div class="state" id="stateLabel">Ready when you are</div><div class="substate" id="stateDetail">Type a message or use your microphone to speak.</div>
-<div class="accountbox" id="accountBox"><form id="loginForm"><strong>Owner sign in</strong><label for="loginEmail">Email</label><input id="loginEmail" type="email" autocomplete="username" required value="ukaeke@gmail.com"><label for="loginPassword">Password</label><input id="loginPassword" type="password" autocomplete="current-password" required><button type="submit">Sign in</button></form><details><summary>First-time owner setup</summary><form id="enrollForm"><label for="enrollName">Full name</label><input id="enrollName" required value="Uka Eke Kalu"><label for="enrollEmail">Owner email</label><input id="enrollEmail" type="email" required value="ukaeke@gmail.com"><label for="enrollSecret">One-time enrollment secret</label><input id="enrollSecret" type="password" minlength="24" required><label for="enrollPassword">Create password (12+ characters)</label><input id="enrollPassword" type="password" minlength="12" required><label for="enrollRecovery">New recovery code (24+ characters)</label><input id="enrollRecovery" minlength="24" required><button id="generateRecovery" class="ghost" type="button">Generate recovery code</button><button type="submit">Create owner account</button></form></details><details><summary>Recover account</summary><form id="recoverForm"><label for="recoverEmail">Owner email</label><input id="recoverEmail" type="email" required value="ukaeke@gmail.com"><label for="recoverCode">Current recovery code</label><input id="recoverCode" required><label for="recoverPassword">New password</label><input id="recoverPassword" type="password" minlength="12" required><label for="recoverNewCode">Replacement recovery code</label><input id="recoverNewCode" minlength="24" required><button id="generateNewRecovery" class="ghost" type="button">Generate replacement code</button><button type="submit">Recover account</button></form></details><button id="logoutButton" class="ghost" type="button" hidden>Sign out</button><small id="accountStatus">Browser API tokens are no longer needed. Owner setup requires a secret configured by the service administrator.</small></div>
+<div class="accountbox" id="accountBox"><form id="loginForm"><strong>Sign in</strong><label for="loginEmail">Email</label><input id="loginEmail" type="email" autocomplete="username" required value="ukaeke@gmail.com"><label for="loginPassword">Password</label><input id="loginPassword" type="password" autocomplete="current-password" required><button type="submit">Sign in</button></form><details><summary>Create a user account</summary><form id="registerForm"><label for="registerName">Full name</label><input id="registerName" required minlength="3" maxlength="120" autocomplete="name"><label for="registerEmail">Email</label><input id="registerEmail" type="email" required autocomplete="email"><label for="registerPassword">Password (12+ characters)</label><input id="registerPassword" type="password" minlength="12" maxlength="256" required autocomplete="new-password"><button type="submit">Create account</button></form><small>Registration is available only when enabled by the service administrator.</small></details><details><summary>First-time owner setup</summary><form id="enrollForm"><label for="enrollName">Full name</label><input id="enrollName" required value="Uka Eke Kalu"><label for="enrollEmail">Owner email</label><input id="enrollEmail" type="email" required value="ukaeke@gmail.com"><label for="enrollSecret">One-time enrollment secret</label><input id="enrollSecret" type="password" minlength="24" required><label for="enrollPassword">Create password (12+ characters)</label><input id="enrollPassword" type="password" minlength="12" required><label for="enrollRecovery">New recovery code (24+ characters)</label><input id="enrollRecovery" minlength="24" required><button id="generateRecovery" class="ghost" type="button">Generate recovery code</button><button type="submit">Create owner account</button></form></details><details><summary>Recover account</summary><form id="recoverForm"><label for="recoverEmail">Owner email</label><input id="recoverEmail" type="email" required value="ukaeke@gmail.com"><label for="recoverCode">Current recovery code</label><input id="recoverCode" required><label for="recoverPassword">New password</label><input id="recoverPassword" type="password" minlength="12" required><label for="recoverNewCode">Replacement recovery code</label><input id="recoverNewCode" minlength="24" required><button id="generateNewRecovery" class="ghost" type="button">Generate replacement code</button><button type="submit">Recover account</button></form></details><button id="logoutButton" class="ghost" type="button" hidden>Sign out</button><small id="accountStatus">Browser API tokens are no longer needed. Owner setup requires a secret configured by the service administrator.</small></div>
 </section>
 <section class="panel chat">
 <div class="chathead"><div><h2>Conversation</h2><p id="connectionLabel">Sign in to begin.</p></div><button class="ghost" id="newChat" type="button">New chat</button></div>
 <div class="chatlog" id="chatLog" aria-live="polite"><div class="empty" id="emptyState"><strong>Your assistant is ready</strong>Ask a question by typing or speaking. The robot will react while Norah processes and speaks its answer.</div></div>
 <div class="composer"><div class="error" id="errorText" role="status"></div><div class="compose-row"><textarea id="messageInput" rows="1" placeholder="Message Norah…" aria-label="Message Norah"></textarea><button id="micButton" class="round ghost mic" type="button" title="Start voice input" aria-label="Start voice input">🎙</button><button id="sendButton" class="round" type="button" aria-label="Send message" title="Send message">➤</button></div><div class="tools"><div class="tools-left"><button class="ghost" id="visionOpen" type="button">Camera eyes</button><button class="ghost" id="voiceToggle" type="button" aria-pressed="true">Voice replies: on</button><button class="ghost" id="stopVoice" type="button">Stop voice</button></div><div class="tools-right"><span class="hint" id="voiceSupport">Voice availability depends on your browser.</span></div></div></div>
+</section>
+
+<section class="panel" id="productivityPanel" aria-labelledby="productivityHeading" style="margin-top:22px">
+  <h2 id="productivityHeading">Assistant tools</h2>
+  <p class="muted">Reminders, document text tools, permission guidance, and reusable workflow drafts.</p>
+  <div class="productivityGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+    <section class="panel">
+      <h3>Reminders</h3>
+      <form id="reminderForm">
+        <label for="reminderTitle">Reminder</label><input id="reminderTitle" maxlength="160" required placeholder="What should I remind you about?">
+        <label for="reminderDue">Date and time (optional)</label><input id="reminderDue" type="datetime-local">
+        <label for="reminderNotes">Notes (optional)</label><input id="reminderNotes" maxlength="2000" placeholder="Extra details">
+        <button type="submit">Save reminder</button>
+      </form>
+      <button type="button" id="loadReminders">Refresh reminders</button>
+      <div id="reminderResults" aria-live="polite"></div>
+    </section>
+    <section class="panel">
+      <h3>Document text tools</h3>
+      <p class="muted">Paste text from a document. This tool does not upload files or send text to an external AI provider.</p>
+      <label for="pdfFile">Extract text from a PDF (up to 10 MB, 200 pages)</label><input id="pdfFile" type="file" accept="application/pdf,.pdf"><button type="button" id="extractPdf">Extract PDF text</button><p class="muted">Scanned PDFs need OCR and may not contain extractable text.</p><textarea id="documentText" rows="6" maxlength="100000" placeholder="Paste document text here"></textarea>
+      <div class="actions">
+        <button type="button" data-document-task="summarize">Summarize</button>
+        <button type="button" data-document-task="extract_bullets">Extract lines</button>
+        <button type="button" data-document-task="count_words">Count words</button>
+      </div>
+      <pre id="documentResult" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+    </section>
+    <section class="panel">
+      <h3>Permission dashboard</h3>
+      <p class="muted">Android settings remain authoritative for actual microphone, camera, contacts, phone, and SMS access.</p>
+      <button type="button" id="loadPermissions">Check permissions and safety</button>
+      <pre id="permissionResults" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+    </section>
+    <section class="panel">
+      <h3>Automation workflows</h3>
+      <label for="workflowName">Workflow name</label><input id="workflowName" maxlength="100" value="Prepare a message draft">
+      <label for="workflowInput">Text to process</label><textarea id="workflowInput" rows="4" maxlength="12000" placeholder="Enter text to summarize or a message draft"></textarea>
+      <div class="actions">
+        <button type="button" id="saveSummaryWorkflow">Save summary workflow</button>
+        <button type="button" id="saveDraftWorkflow">Save message-draft workflow</button>
+      </div>
+      <button type="button" id="loadWorkflows">Refresh workflows</button>
+      <div id="workflowResults" aria-live="polite"></div>
+    </section>
+  </div>
+  <p id="productivityStatus" role="status" aria-live="polite"></p>
 </section>
 </main>
 </div>
@@ -159,11 +206,30 @@ function speakReply(text){
 }
 if('speechSynthesis'in window){window.speechSynthesis.getVoices();window.speechSynthesis.onvoiceschanged=()=>window.speechSynthesis.getVoices()}
 function setBusy(v){busy=v;sendButton.disabled=v;input.disabled=v;setState(v?'thinking':'idle',v?'Thinking…':'Ready when you are',v?'Working on your message.':'Type a message or use your microphone to speak.')}
+function runNativePhoneCommand(message){
+ const device=window.AdaptiveDevice;
+ if(!device)return false;
+ const text=message.trim();
+ const call=text.match(/^(?:please\s+)?(?:call|phone|dial)\s+([+0-9][+0-9()\s*-]{4,38})[.!?]*$/i);
+ if(call){const ok=device.makeCall(call[1]);addBubble('assistant',ok?'Opening the phone dialer with '+call[1]+'. Review the number and place the call yourself.':'Could not open the phone dialer.');return true}
+ const sms=text.match(/^(?:please\s+)?(?:send|text|message)\s+(?:a\s+)?(?:message\s+)?to\s+([+0-9][+0-9()\s*-]{4,38})\s+(?:saying|that says|with the message)\s+([\s\\S]+)$/i);
+ if(sms){const ok=device.sendMessage(sms[1],sms[2].replace(/[.!?]+$/,''));addBubble('assistant',ok?'Opening your SMS app with a draft to '+sms[1]+'. Review it and press Send yourself.':'Could not open the SMS composer.');return true}
+ if(/^(?:please\s+)?(?:play|open)\s+(?:my\s+)?music[.!?]*$/i.test(text)){const ok=device.openMusic();addBubble('assistant',ok?'Opening a music app. Playback controls depend on the music app available on your phone.':'Could not open a music app.');return true}
+ if(/^(?:please\s+)?(?:open|show)\s+(?:my\s+)?(?:phonebook|phone book|contacts)[.!?]*$/i.test(text)){const ok=device.openContacts();addBubble('assistant',ok?'Opening your contacts app. Contact details remain on your phone.':'Could not open contacts.');return true}
+ if(/^(?:please\s+)?(?:read|show|open)\s+(?:my\s+)?(?:text )?messages(?: inbox)?[.!?]*$/i.test(text)){const ok=device.openMessages();addBubble('assistant',ok?'Opening your messaging app so you can read your inbox. Message access is not copied to Norah.':'Could not open your messaging app.');return true}
+ if(/^(?:please\s+)?(?:take|capture)\s+(?:a\s+)?(?:photo|picture)[.!?]*$/i.test(text)){const ok=device.takePicture();addBubble('assistant',ok?'Opening the camera app. Take and save the picture in the camera app.':'Could not open the camera app.');return true}
+ if(/^(?:please\s+)?(?:record|take)\s+(?:a\s+)?video[.!?]*$/i.test(text)){const ok=device.recordVideo();addBubble('assistant',ok?'Opening the camera app in video mode if supported. Start and stop recording in the camera app.':'Could not open video recording.');return true}
+ if(/^(?:please\s+)?(?:open|turn on|launch)\s+(?:my\s+)?camera[.!?]*$/i.test(text)){const ok=device.takePicture();addBubble('assistant',ok?'Opening the camera app. Android camera privacy controls remain active.':'Could not open the camera app.');return true}
+ if(/^(?:please\s+)?open\s+(?:adaptive ai|norah)\s+app settings[.!?]*$/i.test(text)){const ok=device.openAppSettings();addBubble('assistant',ok?'Opening Adaptive AI app settings.':'Could not open app settings.');return true}
+ return false
+}
 async function sendMessage(raw){
  const message=raw.trim();if(!message||busy)return;
  errorText.textContent='';
  if(!authenticated){errorText.textContent='Sign in before sending a message.';return}
- addBubble('user',message);input.value='';setBusy(true);connectionLabel.textContent='Sending securely to Norah…';
+ addBubble('user',message);input.value='';
+ if(runNativePhoneCommand(message)){connectionLabel.textContent='Phone action requested';return}
+ setBusy(true);connectionLabel.textContent='Sending securely to Norah…';
  try{
   const response=await fetch('/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({message,...(conversationId?{conversation_id:conversationId}:{})})});
   const data=await response.json().catch(()=>({detail:'The server returned an unreadable response.'}));
@@ -180,6 +246,7 @@ async function checkSession(){try{const r=await fetch('/v1/auth/me',{credentials
 $('generateRecovery').addEventListener('click',()=>{$('enrollRecovery').value=makeRecoveryCode();$('accountStatus').textContent='Save the generated recovery code securely before creating the account.'});
 $('generateNewRecovery').addEventListener('click',()=>{$('recoverNewCode').value=makeRecoveryCode();$('accountStatus').textContent='Save the replacement recovery code securely before submitting.'});
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();try{await accountPost('/v1/auth/login',{email:$('loginEmail').value,password:$('loginPassword').value});$('loginPassword').value='';await checkSession();errorText.textContent=''}catch(err){errorText.textContent=err.message}});
+$('registerForm').addEventListener('submit',async e=>{e.preventDefault();try{await accountPost('/v1/auth/register',{email:$('registerEmail').value,full_name:$('registerName').value,password:$('registerPassword').value});$('registerPassword').value='';await checkSession();errorText.textContent=''}catch(err){errorText.textContent=err.message}});
 $('enrollForm').addEventListener('submit',async e=>{e.preventDefault();try{const code=$('enrollRecovery').value;await accountPost('/v1/auth/enroll-owner',{email:$('enrollEmail').value,full_name:$('enrollName').value,enrollment_secret:$('enrollSecret').value,password:$('enrollPassword').value,recovery_code:code});alert('Owner account created. Save this recovery code now: '+code);$('enrollSecret').value='';$('enrollPassword').value='';await checkSession()}catch(err){errorText.textContent=err.message}});
 $('recoverForm').addEventListener('submit',async e=>{e.preventDefault();try{await accountPost('/v1/auth/recover',{email:$('recoverEmail').value,recovery_code:$('recoverCode').value,new_password:$('recoverPassword').value,new_recovery_code:$('recoverNewCode').value});$('recoverCode').value='';$('recoverPassword').value='';await checkSession();errorText.textContent='Password reset. Sign in with the new password.'}catch(err){errorText.textContent=err.message}});
 $('logoutButton').addEventListener('click',async()=>{try{await accountPost('/v1/auth/logout',{});authenticated=false;conversationId=null;await checkSession();connectionLabel.textContent='Signed out'}catch(err){errorText.textContent=err.message}});
@@ -281,7 +348,87 @@ $('visionAnalyze').addEventListener('click',async()=>{if(!visionDataUrl)return;i
 window.addEventListener('pagehide',stopVisionCamera);
 
 if(!('speechSynthesis'in window)&&!(window.AdaptiveNative&&typeof window.AdaptiveNative.speak==='function')){$('voiceSupport').textContent='Android speech output will be used when available.'}
+
+async function productivityRequest(path, options={}) {
+  const response = await fetch(path, {credentials:'same-origin', ...options, headers:{'Content-Type':'application/json', ...(options.headers||{})}});
+  const data = await response.json().catch(()=>({detail:'The server returned an unreadable response.'}));
+  if(!response.ok) throw new Error(data.detail||'Request failed.');
+  return data;
+}
+function productivityStatus(message){const el=document.getElementById('productivityStatus');if(el)el.textContent=message;}
+function renderReminderList(data){
+ const root=document.getElementById('reminderResults');root.replaceChildren();
+ if(!data.reminders.length){root.textContent='No reminders saved yet.';return;}
+ data.reminders.forEach(item=>{
+  const row=document.createElement('div');row.className='message';
+  const title=document.createElement('strong');title.textContent=item.title;
+  const meta=document.createElement('p');meta.textContent=(item.due_at||'No date set')+' · '+item.status;
+  const done=document.createElement('button');done.type='button';done.textContent='Complete';
+  done.disabled=item.status!=='active';
+  done.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/reminders/'+encodeURIComponent(item.id)+'?status=completed',{method:'PATCH'});if(window.AdaptiveDevice&&typeof window.AdaptiveDevice.cancelReminder==='function')window.AdaptiveDevice.cancelReminder(item.id);await loadReminders();}catch(e){productivityStatus(e.message)}});
+  const remove=document.createElement('button');remove.type='button';remove.textContent='Delete';
+  remove.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/reminders/'+encodeURIComponent(item.id),{method:'DELETE'});if(window.AdaptiveDevice&&typeof window.AdaptiveDevice.cancelReminder==='function')window.AdaptiveDevice.cancelReminder(item.id);await loadReminders();}catch(e){productivityStatus(e.message)}});
+  row.append(title,meta,done,remove);root.append(row);
+ });
+}
+async function loadReminders(){try{renderReminderList(await productivityRequest('/v1/assistant/reminders'));productivityStatus('Reminders loaded. Notifications are not scheduled by the server yet.');}catch(e){productivityStatus(e.message)}}
+document.getElementById('reminderForm')?.addEventListener('submit',async event=>{
+ event.preventDefault();
+ const due=document.getElementById('reminderDue').value;
+ try{const saved=await productivityRequest('/v1/assistant/reminders',{method:'POST',body:JSON.stringify({title:document.getElementById('reminderTitle').value,due_at:due?new Date(due).toISOString():null,notes:document.getElementById('reminderNotes').value})});let notice='Reminder saved to your account.';if(due&&window.AdaptiveDevice&&typeof window.AdaptiveDevice.scheduleReminder==='function'){const scheduled=window.AdaptiveDevice.scheduleReminder(saved.reminder.id,saved.reminder.title,Date.parse(saved.reminder.due_at));notice+=scheduled?' A local notification was scheduled on this device.':' The reminder is saved, but this device did not schedule its notification; check notification permission and the date/time.';}else if(due){notice+=' Local notifications are available in the Android app; this browser cannot schedule Android notifications.';}event.target.reset();await loadReminders();productivityStatus(notice);}catch(e){productivityStatus(e.message)}
+});
+document.getElementById('extractPdf')?.addEventListener('click',async()=>{
+ const file=document.getElementById('pdfFile').files?.[0];
+ if(!file){productivityStatus('Choose a PDF first.');return;}
+ if(file.size>10*1024*1024){productivityStatus('PDF must be 10 MB or smaller.');return;}
+ if(!navigator.onLine){productivityStatus('PDF extraction requires an internet connection.');return;}
+ const form=new FormData();form.append('file',file);
+ try{const response=await fetch('/v1/assistant/documents/extract-pdf',{method:'POST',credentials:'same-origin',body:form});const data=await response.json().catch(()=>({detail:'The server returned an unreadable response.'}));if(!response.ok)throw new Error(data.detail||'PDF extraction failed.');document.getElementById('documentText').value=data.text;document.getElementById('documentResult').textContent='Extracted '+data.character_count+' characters from '+data.page_count+' page(s).\\n'+data.note;productivityStatus('PDF text extracted. Choose a document tool to analyze it.');}catch(e){productivityStatus(e.message)}
+});
+document.querySelectorAll('[data-document-task]').forEach(button=>button.addEventListener('click',async()=>{
+ const textValue=document.getElementById('documentText').value, task=button.dataset.documentTask;
+ if(!navigator.onLine){
+  const words=textValue.trim()?textValue.trim().split(/\s+/):[];
+  let result={};
+  if(task==='count_words') result={word_count:words.length,character_count:textValue.length,paragraph_count:textValue.split(/\n+/).filter(line=>line.trim()).length};
+  else if(task==='extract_bullets') result={bullets:textValue.split(/\n+/).map(line=>line.trim().replace(/^[\s*•-]+/,'')).filter(Boolean).slice(0,100)};
+  else result={summary:textValue.split(/(?<=[.!?])\s+/).slice(0,words.length>120?5:3).join(' ').slice(0,3000),note:'Offline extractive summary using simple browser rules; no AI inference.'};
+  document.getElementById('documentResult').textContent=JSON.stringify(result,null,2);productivityStatus('Offline document tool used in this browser. No text was sent to the server.');return;
+ }
+ try{const result=await productivityRequest('/v1/assistant/documents/analyze',{method:'POST',body:JSON.stringify({text:textValue,task})});document.getElementById('documentResult').textContent=JSON.stringify(result.result,null,2);productivityStatus('Document text processed by built-in text rules on the Adaptive AI server; it is not sent to a third-party AI provider.');}catch(e){productivityStatus(e.message)}
+}));
+document.getElementById('loadPermissions')?.addEventListener('click',async()=>{try{const result=await productivityRequest('/v1/assistant/permissions');document.getElementById('permissionResults').textContent=JSON.stringify(result,null,2);productivityStatus('Permission guidance loaded; check actual permissions in Android settings.');}catch(e){productivityStatus(e.message)}});
+async function saveWorkflow(type){
+ const input=document.getElementById('workflowInput').value;
+ const step=type==='summarize_text'?{type,input}:{type:'draft_message',input};
+ try{const result=await productivityRequest('/v1/assistant/workflows',{method:'POST',body:JSON.stringify({name:document.getElementById('workflowName').value,steps:[step]})});productivityStatus('Workflow saved as a draft; nothing has executed.');await loadWorkflows();}catch(e){productivityStatus(e.message)}
+}
+document.getElementById('saveSummaryWorkflow')?.addEventListener('click',()=>saveWorkflow('summarize_text'));
+document.getElementById('saveDraftWorkflow')?.addEventListener('click',()=>saveWorkflow('draft_message'));
+async function loadWorkflows(){
+ try{const data=await productivityRequest('/v1/assistant/workflows');const root=document.getElementById('workflowResults');root.replaceChildren();
+ if(!data.workflows.length){root.textContent='No workflows saved yet.';return;}
+ data.workflows.forEach(workflow=>{
+  const row=document.createElement('div');row.className='message';
+  const title=document.createElement('strong');title.textContent=workflow.name;
+  const meta=document.createElement('p');meta.textContent='Status: '+workflow.status+' · '+workflow.steps.length+' step(s)';
+  const preview=document.createElement('button');preview.type='button';preview.textContent='Preview only';
+  preview.addEventListener('click',async()=>{try{const result=await productivityRequest('/v1/assistant/workflows/'+encodeURIComponent(workflow.id)+'/preview',{method:'POST'});const out=document.createElement('pre');out.style.whiteSpace='pre-wrap';out.textContent=JSON.stringify(result.preview,null,2);row.append(out);}catch(e){productivityStatus(e.message)}});
+  const approve=document.createElement('button');approve.type='button';approve.textContent='Approve draft';approve.disabled=workflow.status!=='draft';
+  approve.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/workflows/'+encodeURIComponent(workflow.id)+'/approve',{method:'POST'});await loadWorkflows();productivityStatus('Approval recorded; execution remains disabled.');}catch(e){productivityStatus(e.message)}});
+  row.append(title,meta,preview,approve);root.append(row);
+ });
+ }catch(e){productivityStatus(e.message)}
+}
+if(!navigator.onLine) productivityStatus('Offline: the cached app shell may open, but account data and API tools need an internet connection.');
+window.addEventListener('offline',()=>productivityStatus('You are offline. Private account data is not cached; reconnect to sync.'));
+window.addEventListener('online',()=>productivityStatus('Connection restored. Refresh reminders or workflows to load server data.'));
 })();
+</script>
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/app/service-worker.js').catch(() => {}));
+}
 </script>
 </body>
 </html>

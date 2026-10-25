@@ -210,17 +210,17 @@ function runNativePhoneCommand(message){
  const device=window.AdaptiveDevice;
  if(!device)return false;
  const text=message.trim();
- const call=text.match(/^(?:please\\s+)?(?:call|phone|dial)\\s+([+0-9][+0-9()\\s*-]{4,38})[.!?]*$/i);
+ const call=text.match(/^(?:please\s+)?(?:call|phone|dial)\s+([+0-9][+0-9()\s*-]{4,38})[.!?]*$/i);
  if(call){const ok=device.makeCall(call[1]);addBubble('assistant',ok?'Opening the phone dialer with '+call[1]+'. Review the number and place the call yourself.':'Could not open the phone dialer.');return true}
- const sms=text.match(/^(?:please\\s+)?(?:send|text|message)\\s+(?:a\\s+)?(?:message\\s+)?to\\s+([+0-9][+0-9()\\s*-]{4,38})\\s+(?:saying|that says|with the message)\\s+([\\s\\S]+)$/i);
+ const sms=text.match(/^(?:please\s+)?(?:send|text|message)\s+(?:a\s+)?(?:message\s+)?to\s+([+0-9][+0-9()\s*-]{4,38})\s+(?:saying|that says|with the message)\s+([\s\\S]+)$/i);
  if(sms){const ok=device.sendMessage(sms[1],sms[2].replace(/[.!?]+$/,''));addBubble('assistant',ok?'Opening your SMS app with a draft to '+sms[1]+'. Review it and press Send yourself.':'Could not open the SMS composer.');return true}
- if(/^(?:please\\s+)?(?:play|open)\\s+(?:my\\s+)?music[.!?]*$/i.test(text)){const ok=device.openMusic();addBubble('assistant',ok?'Opening a music app. Playback controls depend on the music app available on your phone.':'Could not open a music app.');return true}
- if(/^(?:please\\s+)?(?:open|show)\\s+(?:my\\s+)?(?:phonebook|phone book|contacts)[.!?]*$/i.test(text)){const ok=device.openContacts();addBubble('assistant',ok?'Opening your contacts app. Contact details remain on your phone.':'Could not open contacts.');return true}
- if(/^(?:please\\s+)?(?:read|show|open)\\s+(?:my\\s+)?(?:text )?messages(?: inbox)?[.!?]*$/i.test(text)){const ok=device.openMessages();addBubble('assistant',ok?'Opening your messaging app so you can read your inbox. Message access is not copied to Norah.':'Could not open your messaging app.');return true}
- if(/^(?:please\\s+)?(?:take|capture)\\s+(?:a\\s+)?(?:photo|picture)[.!?]*$/i.test(text)){const ok=device.takePicture();addBubble('assistant',ok?'Opening the camera app. Take and save the picture in the camera app.':'Could not open the camera app.');return true}
- if(/^(?:please\\s+)?(?:record|take)\\s+(?:a\\s+)?video[.!?]*$/i.test(text)){const ok=device.recordVideo();addBubble('assistant',ok?'Opening the camera app in video mode if supported. Start and stop recording in the camera app.':'Could not open video recording.');return true}
- if(/^(?:please\\s+)?(?:open|turn on|launch)\\s+(?:my\\s+)?camera[.!?]*$/i.test(text)){const ok=device.takePicture();addBubble('assistant',ok?'Opening the camera app. Android camera privacy controls remain active.':'Could not open the camera app.');return true}
- if(/^(?:please\\s+)?open\\s+(?:adaptive ai|norah)\\s+app settings[.!?]*$/i.test(text)){const ok=device.openAppSettings();addBubble('assistant',ok?'Opening Adaptive AI app settings.':'Could not open app settings.');return true}
+ if(/^(?:please\s+)?(?:play|open)\s+(?:my\s+)?music[.!?]*$/i.test(text)){const ok=device.openMusic();addBubble('assistant',ok?'Opening a music app. Playback controls depend on the music app available on your phone.':'Could not open a music app.');return true}
+ if(/^(?:please\s+)?(?:open|show)\s+(?:my\s+)?(?:phonebook|phone book|contacts)[.!?]*$/i.test(text)){const ok=device.openContacts();addBubble('assistant',ok?'Opening your contacts app. Contact details remain on your phone.':'Could not open contacts.');return true}
+ if(/^(?:please\s+)?(?:read|show|open)\s+(?:my\s+)?(?:text )?messages(?: inbox)?[.!?]*$/i.test(text)){const ok=device.openMessages();addBubble('assistant',ok?'Opening your messaging app so you can read your inbox. Message access is not copied to Norah.':'Could not open your messaging app.');return true}
+ if(/^(?:please\s+)?(?:take|capture)\s+(?:a\s+)?(?:photo|picture)[.!?]*$/i.test(text)){const ok=device.takePicture();addBubble('assistant',ok?'Opening the camera app. Take and save the picture in the camera app.':'Could not open the camera app.');return true}
+ if(/^(?:please\s+)?(?:record|take)\s+(?:a\s+)?video[.!?]*$/i.test(text)){const ok=device.recordVideo();addBubble('assistant',ok?'Opening the camera app in video mode if supported. Start and stop recording in the camera app.':'Could not open video recording.');return true}
+ if(/^(?:please\s+)?(?:open|turn on|launch)\s+(?:my\s+)?camera[.!?]*$/i.test(text)){const ok=device.takePicture();addBubble('assistant',ok?'Opening the camera app. Android camera privacy controls remain active.':'Could not open the camera app.');return true}
+ if(/^(?:please\s+)?open\s+(?:adaptive ai|norah)\s+app settings[.!?]*$/i.test(text)){const ok=device.openAppSettings();addBubble('assistant',ok?'Opening Adaptive AI app settings.':'Could not open app settings.');return true}
  return false
 }
 async function sendMessage(raw){
@@ -380,11 +380,11 @@ document.getElementById('reminderForm')?.addEventListener('submit',async event=>
 document.querySelectorAll('[data-document-task]').forEach(button=>button.addEventListener('click',async()=>{
  const textValue=document.getElementById('documentText').value, task=button.dataset.documentTask;
  if(!navigator.onLine){
-  const words=textValue.trim()?textValue.trim().split(/\\s+/):[];
+  const words=textValue.trim()?textValue.trim().split(/\s+/):[];
   let result={};
-  if(task==='count_words') result={word_count:words.length,character_count:textValue.length,paragraph_count:textValue.split(/\\n+/).filter(line=>line.trim()).length};
-  else if(task==='extract_bullets') result={bullets:textValue.split(/\\n+/).map(line=>line.trim().replace(/^[\\s*•-]+/,'')).filter(Boolean).slice(0,100)};
-  else result={summary:textValue.split(/(?<=[.!?])\\s+/).slice(0,words.length>120?5:3).join(' ').slice(0,3000),note:'Offline extractive summary using simple browser rules; no AI inference.'};
+  if(task==='count_words') result={word_count:words.length,character_count:textValue.length,paragraph_count:textValue.split(/\n+/).filter(line=>line.trim()).length};
+  else if(task==='extract_bullets') result={bullets:textValue.split(/\n+/).map(line=>line.trim().replace(/^[\s*•-]+/,'')).filter(Boolean).slice(0,100)};
+  else result={summary:textValue.split(/(?<=[.!?])\s+/).slice(0,words.length>120?5:3).join(' ').slice(0,3000),note:'Offline extractive summary using simple browser rules; no AI inference.'};
   document.getElementById('documentResult').textContent=JSON.stringify(result,null,2);productivityStatus('Offline document tool used in this browser. No text was sent to the server.');return;
  }
  try{const result=await productivityRequest('/v1/assistant/documents/analyze',{method:'POST',body:JSON.stringify({text:textValue,task})});document.getElementById('documentResult').textContent=JSON.stringify(result.result,null,2);productivityStatus('Document text processed by built-in text rules on the Adaptive AI server; it is not sent to a third-party AI provider.');}catch(e){productivityStatus(e.message)}

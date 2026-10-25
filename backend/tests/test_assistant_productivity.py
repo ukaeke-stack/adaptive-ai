@@ -52,3 +52,4 @@ def test_social_oauth_routes_are_registered():
     assert "/v1/social/{provider}/connect" in schema["paths"]
     assert "/v1/social/{provider}/callback" in schema["paths"]
     assert "/v1/social/{provider}/disconnect" in schema["paths"]
+    assert "/v1/social/{provider}/profile" in schema["paths"]

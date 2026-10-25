@@ -53,6 +53,12 @@ def _ensure_schema(engine: Engine) -> None:
                 updated_at TEXT NOT NULL
             )
         """))
+        if engine.dialect.name == "sqlite":
+            columns = {row[1] for row in connection.execute(text("PRAGMA table_info(conversations)")).fetchall()}
+        else:
+            columns = {row["name"] for row in connection.execute(text("SELECT column_name AS name FROM information_schema.columns WHERE table_name='conversations'")).mappings().all()}
+        if "user_id" not in columns:
+            connection.execute(text("ALTER TABLE conversations ADD COLUMN user_id TEXT"))
         connection.execute(text("""
             CREATE TABLE IF NOT EXISTS adaptive_users (
                 id TEXT PRIMARY KEY,
@@ -64,6 +70,12 @@ def _ensure_schema(engine: Engine) -> None:
                 phone_verified INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             )
+        """))
+        # Attach legacy owner conversations to the existing owner account.
+        connection.execute(text("""
+            UPDATE conversations SET user_id = (
+                SELECT id FROM adaptive_users WHERE role='owner' LIMIT 1
+            ) WHERE user_id IS NULL
         """))
         connection.execute(text("""
             CREATE UNIQUE INDEX IF NOT EXISTS adaptive_one_owner
@@ -116,32 +128,34 @@ def initialize_store() -> None:
     _ready_engine()
 
 
-def create_conversation() -> dict:
+def create_conversation(user_id: str | None = None) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     conversation_id = str(uuid4())
     engine = _ready_engine()
     with engine.begin() as connection:
         connection.execute(text(
-            "INSERT INTO conversations(id, created_at, updated_at) VALUES (:id, :created, :updated)"
-        ), {"id": conversation_id, "created": now, "updated": now})
+            "INSERT INTO conversations(id, user_id, created_at, updated_at) VALUES (:id, :uid, :created, :updated)"
+        ), {"id": conversation_id, "uid": user_id, "created": now, "updated": now})
     return {"id": conversation_id, "created_at": now, "updated_at": now}
 
 
-def list_conversations() -> list[dict]:
+def list_conversations(user_id: str | None = None) -> list[dict]:
     engine = _ready_engine()
     with engine.connect() as connection:
-        rows = connection.execute(text(
-            "SELECT id, created_at, updated_at FROM conversations ORDER BY updated_at DESC LIMIT 100"
-        )).mappings().all()
+        if user_id is None:
+            rows = connection.execute(text("SELECT id, created_at, updated_at FROM conversations ORDER BY updated_at DESC LIMIT 100")).mappings().all()
+        else:
+            rows = connection.execute(text("SELECT id, created_at, updated_at FROM conversations WHERE user_id=:uid ORDER BY updated_at DESC LIMIT 100"), {"uid": user_id}).mappings().all()
     return [dict(row) for row in rows]
 
 
-def conversation_exists(conversation_id: str) -> bool:
+def conversation_exists(conversation_id: str, user_id: str | None = None) -> bool:
     engine = _ready_engine()
     with engine.connect() as connection:
-        row = connection.execute(text(
-            "SELECT 1 FROM conversations WHERE id = :id"
-        ), {"id": conversation_id}).first()
+        if user_id is None:
+            row = connection.execute(text("SELECT 1 FROM conversations WHERE id=:id"), {"id": conversation_id}).first()
+        else:
+            row = connection.execute(text("SELECT 1 FROM conversations WHERE id=:id AND user_id=:uid"), {"id": conversation_id, "uid": user_id}).first()
     return row is not None
 
 
@@ -171,10 +185,11 @@ def get_messages(conversation_id: str, limit: int = 20) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def delete_conversation(conversation_id: str) -> bool:
+def delete_conversation(conversation_id: str, user_id: str | None = None) -> bool:
     engine = _ready_engine()
     with engine.begin() as connection:
-        result = connection.execute(text(
-            "DELETE FROM conversations WHERE id = :id"
-        ), {"id": conversation_id})
+        if user_id is None:
+            result = connection.execute(text("DELETE FROM conversations WHERE id=:id"), {"id": conversation_id})
+        else:
+            result = connection.execute(text("DELETE FROM conversations WHERE id=:id AND user_id=:uid"), {"id": conversation_id, "uid": user_id})
         return result.rowcount > 0

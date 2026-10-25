@@ -10,7 +10,8 @@ def test_voice_chat_interface_is_served_same_origin():
     assert "Norah" in response.text
     assert "SpeechRecognition" in response.text
     assert "apiToken" not in response.text
-    assert "Owner sign in" in response.text
+    assert "Sign in" in response.text
+    assert "Create a user account" in response.text
     assert "Authorization':'Bearer" not in response.text
     assert "fetch('/v1/chat'" in response.text
 

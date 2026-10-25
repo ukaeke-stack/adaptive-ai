@@ -71,6 +71,12 @@ def _ensure_schema(engine: Engine) -> None:
                 created_at TEXT NOT NULL
             )
         """))
+        # Attach legacy owner conversations to the existing owner account.
+        connection.execute(text("""
+            UPDATE conversations SET user_id = (
+                SELECT id FROM adaptive_users WHERE role='owner' LIMIT 1
+            ) WHERE user_id IS NULL
+        """))
         connection.execute(text("""
             CREATE UNIQUE INDEX IF NOT EXISTS adaptive_one_owner
             ON adaptive_users(role) WHERE role = 'owner'

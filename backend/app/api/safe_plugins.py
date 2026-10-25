@@ -97,9 +97,9 @@ def run_plugin(plugin_id: str, body: RunInput, request: Request):
         raise HTTPException(status_code=403, detail="Capability was not approved for this plugin.")
     value = body.input
     if body.capability == "count_words":
-        result = {"word_count":len(re.findall(r"\\S+",value)),"character_count":len(value)}
+        result = {"word_count":len(value.split()),"character_count":len(value)}
     elif body.capability == "extract_bullets":
-        result = {"bullets":[line.strip(" \\t-*•") for line in value.splitlines() if line.strip()][:100]}
+        result = {"bullets":[line.strip(" -*•") for line in value.splitlines() if line.strip()][:100]}
     elif body.capability == "draft_message":
         result = {"draft":value,"sent":False}
     else:

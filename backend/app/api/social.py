@@ -122,7 +122,7 @@ def callback(provider: str, request: Request, code: str|None=None, state: str|No
    VALUES (:uid,:provider,:token,:scopes,:at) ON CONFLICT(user_id,provider) DO UPDATE SET
    token_ciphertext=excluded.token_ciphertext,scopes=excluded.scopes,connected_at=excluded.connected_at"""),
    {"uid":user["id"],"provider":provider,"token":encrypted,"scopes":scopes,"at":datetime.now(timezone.utc).isoformat()})
- return {"connected":True,"provider":provider,"scopes":scopes,"message":"Account connected. Tokens are encrypted at rest and are never returned by this API."}
+ return RedirectResponse("/app/?social=connected",status_code=303)
 
 @router.delete("/{provider}/disconnect")
 def disconnect(provider: str, request: Request):

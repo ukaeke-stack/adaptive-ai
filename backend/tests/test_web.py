@@ -55,14 +55,14 @@ def test_account_forms_include_owner_enrollment_and_recovery():
     assert "/v1/auth/recover" in response.text
     assert "ADAPTIVE_AI_API_TOKEN" not in response.text
 
-def test_floating_robot_refreshes_authentication_before_listening_and_sending():
-    response = client.get("/app/?overlay=1")
+def test_floating_robot_overlays_are_removed_but_main_robot_panel_remains():
+    response = client.get("/app/")
     assert response.status_code == 200
-    assert "await checkSession();" in response.text
-    assert "Please sign in to Adaptive AI in the main app, then tap Norah again." in response.text
-    assert "async function activateFloatingRobot()" in response.text
-    assert "credentials:'same-origin'" in response.text
+    assert 'id="floatingCompanion"' not in response.text
+    assert 'id="floatToggle"' not in response.text
+    assert "NorahStartListening" not in response.text
+    assert "placeFloatingRobot" not in response.text
+    assert 'id="robotPanel"' in response.text
+    assert 'id="micButton"' in response.text
+    assert "window.NorahNativeVoice" in response.text
     assert "fetch('/v1/chat'" in response.text
-    assert "Authorization':'Bearer" not in response.text
-    assert "apiToken" not in response.text
-

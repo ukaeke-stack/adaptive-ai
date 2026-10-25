@@ -24,9 +24,18 @@ jobs:
           gradle-version: "8.9"
       - name: Assemble debug APK
         run: gradle -p android :app:assembleDebug
-      - name: Upload debug APK
+      - name: Record exact source revision
+        run: |
+          mkdir -p build-metadata
+          printf 'Commit: %s\nBranch: %s\nWorkflow run: %s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$GITHUB_RUN_ID" > build-metadata/build-info.txt
+          sha256sum android/app/build/outputs/apk/debug/app-debug.apk > build-metadata/apk-sha256.txt
+      - name: Upload debug APK and build verification
         uses: actions/upload-artifact@v4
         with:
           name: adaptive-ai-android-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            build-metadata/build-info.txt
+            build-metadata/apk-sha256.txt
           if-no-files-found: error
+          retention-days: 90

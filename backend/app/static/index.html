@@ -92,7 +92,7 @@ input,textarea,button{font:inherit}input,textarea{background:#091629;border:1px 
     <section class="panel">
       <h3>Document text tools</h3>
       <p class="muted">Paste text from a document. This tool does not upload files or send text to an external AI provider.</p>
-      <textarea id="documentText" rows="6" maxlength="100000" placeholder="Paste document text here"></textarea>
+      <label for="pdfFile">Extract text from a PDF (up to 10 MB, 200 pages)</label><input id="pdfFile" type="file" accept="application/pdf,.pdf"><button type="button" id="extractPdf">Extract PDF text</button><p class="muted">Scanned PDFs need OCR and may not contain extractable text.</p><textarea id="documentText" rows="6" maxlength="100000" placeholder="Paste document text here"></textarea>
       <div class="actions">
         <button type="button" data-document-task="summarize">Summarize</button>
         <button type="button" data-document-task="extract_bullets">Extract lines</button>
@@ -376,6 +376,14 @@ document.getElementById('reminderForm')?.addEventListener('submit',async event=>
  event.preventDefault();
  const due=document.getElementById('reminderDue').value;
  try{const saved=await productivityRequest('/v1/assistant/reminders',{method:'POST',body:JSON.stringify({title:document.getElementById('reminderTitle').value,due_at:due?new Date(due).toISOString():null,notes:document.getElementById('reminderNotes').value})});let notice='Reminder saved to your account.';if(due&&window.AdaptiveDevice&&typeof window.AdaptiveDevice.scheduleReminder==='function'){const scheduled=window.AdaptiveDevice.scheduleReminder(saved.reminder.id,saved.reminder.title,Date.parse(saved.reminder.due_at));notice+=scheduled?' A local notification was scheduled on this device.':' The reminder is saved, but this device did not schedule its notification; check notification permission and the date/time.';}else if(due){notice+=' Local notifications are available in the Android app; this browser cannot schedule Android notifications.';}event.target.reset();await loadReminders();productivityStatus(notice);}catch(e){productivityStatus(e.message)}
+});
+document.getElementById('extractPdf')?.addEventListener('click',async()=>{
+ const file=document.getElementById('pdfFile').files?.[0];
+ if(!file){productivityStatus('Choose a PDF first.');return;}
+ if(file.size>10*1024*1024){productivityStatus('PDF must be 10 MB or smaller.');return;}
+ if(!navigator.onLine){productivityStatus('PDF extraction requires an internet connection.');return;}
+ const form=new FormData();form.append('file',file);
+ try{const response=await fetch('/v1/assistant/documents/extract-pdf',{method:'POST',credentials:'same-origin',body:form});const data=await response.json().catch(()=>({detail:'The server returned an unreadable response.'}));if(!response.ok)throw new Error(data.detail||'PDF extraction failed.');document.getElementById('documentText').value=data.text;document.getElementById('documentResult').textContent='Extracted '+data.character_count+' characters from '+data.page_count+' page(s).\\n'+data.note;productivityStatus('PDF text extracted. Choose a document tool to analyze it.');}catch(e){productivityStatus(e.message)}
 });
 document.querySelectorAll('[data-document-task]').forEach(button=>button.addEventListener('click',async()=>{
  const textValue=document.getElementById('documentText').value, task=button.dataset.documentTask;

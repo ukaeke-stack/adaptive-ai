@@ -1,0 +1,1 @@
+Scanned PDF OCR requires Tesseract OCR installed in the deployment image.

@@ -59,6 +59,13 @@ class AndroidDeviceActions(private val context: Context) {
         return launch(intent, "No SMS application is available.")
     }
 
+    /** Opens the default messaging app so the user can review their inbox. */
+    @JavascriptInterface
+    fun openMessages(): Boolean {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING)
+        return launch(intent, "No messaging application is available.")
+    }
+
     /** Opens the system contacts app. Android owns the contact data and picker permissions. */
     @JavascriptInterface
     fun openContacts(): Boolean =

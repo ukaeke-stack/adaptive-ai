@@ -7,6 +7,9 @@ from app.api.capabilities import router as capabilities_router
 from app.api.chat import router as chat_router
 from app.api.vision import router as vision_router
 from app.api.conversations import router as conversations_router
+from app.api.plugins import router as plugins_router
+from app.api.social import router as social_router
+from app.api.updates import router as updates_router
 from app.security.sessions import router as auth_router
 from app.config import get_settings
 from app.security.auth import protect_api_routes
@@ -24,6 +27,9 @@ app.include_router(capabilities_router)
 app.include_router(chat_router)
 app.include_router(vision_router)
 app.include_router(conversations_router)
+app.include_router(plugins_router)
+app.include_router(social_router)
+app.include_router(updates_router)
 app.include_router(auth_router)
 
 # Serve the same-origin web interface. API secrets remain server-side; the UI

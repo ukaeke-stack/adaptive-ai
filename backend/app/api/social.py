@@ -41,6 +41,13 @@ def _settings(provider):
   raise HTTPException(status_code=503, detail=f"{provider} OAuth credentials and redirect URI are not fully configured.")
  return cfg,values
 
+def _get_form(url, fields):
+ req=urllib.request.Request(url+"?"+urllib.parse.urlencode(fields),headers={"Accept":"application/json"})
+ try:
+  with urllib.request.urlopen(req,timeout=12) as response: return json.loads(response.read(1_000_000))
+ except Exception as exc:
+  raise HTTPException(status_code=502,detail="The social provider token exchange failed. No connection was saved.") from exc
+
 def _post_form(url, fields, basic_auth=None):
  data=urllib.parse.urlencode(fields).encode()
  req=urllib.request.Request(url,data=data,headers={"Accept":"application/json","Content-Type":"application/x-www-form-urlencoded"})
@@ -104,7 +111,7 @@ def callback(provider: str, request: Request, code: str|None=None, state: str|No
  else: form["client_id"]=values["id"]
  if values["secret"]: form["client_secret"]=values["secret"]
  if cfg["pkce"]: form["code_verifier"]=row["verifier"]
- token=_post_form(cfg["token"],form, f'{values["id"]}:{values["secret"]}' if provider=="x" and values["secret"] else None)
+ token=_get_form(cfg["token"],form) if provider=="facebook" else _post_form(cfg["token"],form, f'{values["id"]}:{values["secret"]}' if provider=="x" and values["secret"] else None)
  if not isinstance(token,dict) or not token.get("access_token"):
   raise HTTPException(status_code=502,detail="Provider did not return an access token. No connection was saved.")
  payload=json.dumps({"access_token":token["access_token"],"refresh_token":token.get("refresh_token"),"expires_in":token.get("expires_in"),"token_type":token.get("token_type","Bearer")},separators=(",",":")).encode()

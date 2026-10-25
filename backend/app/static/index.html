@@ -73,6 +73,53 @@ input,textarea,button{font:inherit}input,textarea{background:#091629;border:1px 
 <div class="chatlog" id="chatLog" aria-live="polite"><div class="empty" id="emptyState"><strong>Your assistant is ready</strong>Ask a question by typing or speaking. The robot will react while Norah processes and speaks its answer.</div></div>
 <div class="composer"><div class="error" id="errorText" role="status"></div><div class="compose-row"><textarea id="messageInput" rows="1" placeholder="Message Norah…" aria-label="Message Norah"></textarea><button id="micButton" class="round ghost mic" type="button" title="Start voice input" aria-label="Start voice input">🎙</button><button id="sendButton" class="round" type="button" aria-label="Send message" title="Send message">➤</button></div><div class="tools"><div class="tools-left"><button class="ghost" id="visionOpen" type="button">Camera eyes</button><button class="ghost" id="voiceToggle" type="button" aria-pressed="true">Voice replies: on</button><button class="ghost" id="stopVoice" type="button">Stop voice</button></div><div class="tools-right"><span class="hint" id="voiceSupport">Voice availability depends on your browser.</span></div></div></div>
 </section>
+
+<section class="panel" id="productivityPanel" aria-labelledby="productivityHeading" style="margin-top:22px">
+  <h2 id="productivityHeading">Assistant tools</h2>
+  <p class="muted">Reminders, document text tools, permission guidance, and reusable workflow drafts.</p>
+  <div class="productivityGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+    <section class="panel">
+      <h3>Reminders</h3>
+      <form id="reminderForm">
+        <label for="reminderTitle">Reminder</label><input id="reminderTitle" maxlength="160" required placeholder="What should I remind you about?">
+        <label for="reminderDue">Date and time (optional)</label><input id="reminderDue" type="datetime-local">
+        <label for="reminderNotes">Notes (optional)</label><input id="reminderNotes" maxlength="2000" placeholder="Extra details">
+        <button type="submit">Save reminder</button>
+      </form>
+      <button type="button" id="loadReminders">Refresh reminders</button>
+      <div id="reminderResults" aria-live="polite"></div>
+    </section>
+    <section class="panel">
+      <h3>Document text tools</h3>
+      <p class="muted">Paste text from a document. This tool does not upload files or send text to an external AI provider.</p>
+      <textarea id="documentText" rows="6" maxlength="100000" placeholder="Paste document text here"></textarea>
+      <div class="actions">
+        <button type="button" data-document-task="summarize">Summarize</button>
+        <button type="button" data-document-task="extract_bullets">Extract lines</button>
+        <button type="button" data-document-task="count_words">Count words</button>
+      </div>
+      <pre id="documentResult" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+    </section>
+    <section class="panel">
+      <h3>Permission dashboard</h3>
+      <p class="muted">Android settings remain authoritative for actual microphone, camera, contacts, phone, and SMS access.</p>
+      <button type="button" id="loadPermissions">Check permissions and safety</button>
+      <pre id="permissionResults" aria-live="polite" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+    </section>
+    <section class="panel">
+      <h3>Automation workflows</h3>
+      <label for="workflowName">Workflow name</label><input id="workflowName" maxlength="100" value="Prepare a message draft">
+      <label for="workflowInput">Text to process</label><textarea id="workflowInput" rows="4" maxlength="12000" placeholder="Enter text to summarize or a message draft"></textarea>
+      <div class="actions">
+        <button type="button" id="saveSummaryWorkflow">Save summary workflow</button>
+        <button type="button" id="saveDraftWorkflow">Save message-draft workflow</button>
+      </div>
+      <button type="button" id="loadWorkflows">Refresh workflows</button>
+      <div id="workflowResults" aria-live="polite"></div>
+    </section>
+  </div>
+  <p id="productivityStatus" role="status" aria-live="polite"></p>
+</section>
 </main>
 </div>
 
@@ -301,6 +348,64 @@ $('visionAnalyze').addEventListener('click',async()=>{if(!visionDataUrl)return;i
 window.addEventListener('pagehide',stopVisionCamera);
 
 if(!('speechSynthesis'in window)&&!(window.AdaptiveNative&&typeof window.AdaptiveNative.speak==='function')){$('voiceSupport').textContent='Android speech output will be used when available.'}
+
+async function productivityRequest(path, options={}) {
+  const response = await fetch(path, {credentials:'same-origin', ...options, headers:{'Content-Type':'application/json', ...(options.headers||{})}});
+  const data = await response.json().catch(()=>({detail:'The server returned an unreadable response.'}));
+  if(!response.ok) throw new Error(data.detail||'Request failed.');
+  return data;
+}
+function productivityStatus(message){const el=document.getElementById('productivityStatus');if(el)el.textContent=message;}
+function renderReminderList(data){
+ const root=document.getElementById('reminderResults');root.replaceChildren();
+ if(!data.reminders.length){root.textContent='No reminders saved yet.';return;}
+ data.reminders.forEach(item=>{
+  const row=document.createElement('div');row.className='message';
+  const title=document.createElement('strong');title.textContent=item.title;
+  const meta=document.createElement('p');meta.textContent=(item.due_at||'No date set')+' · '+item.status;
+  const done=document.createElement('button');done.type='button';done.textContent='Complete';
+  done.disabled=item.status!=='active';
+  done.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/reminders/'+encodeURIComponent(item.id)+'?status=completed',{method:'PATCH'});await loadReminders();}catch(e){productivityStatus(e.message)}});
+  const remove=document.createElement('button');remove.type='button';remove.textContent='Delete';
+  remove.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/reminders/'+encodeURIComponent(item.id),{method:'DELETE'});await loadReminders();}catch(e){productivityStatus(e.message)}});
+  row.append(title,meta,done,remove);root.append(row);
+ });
+}
+async function loadReminders(){try{renderReminderList(await productivityRequest('/v1/assistant/reminders'));productivityStatus('Reminders loaded. Notifications are not scheduled by the server yet.');}catch(e){productivityStatus(e.message)}}
+document.getElementById('reminderForm')?.addEventListener('submit',async event=>{
+ event.preventDefault();
+ const due=document.getElementById('reminderDue').value;
+ try{await productivityRequest('/v1/assistant/reminders',{method:'POST',body:JSON.stringify({title:document.getElementById('reminderTitle').value,due_at:due?new Date(due).toISOString():null,notes:document.getElementById('reminderNotes').value})});event.target.reset();await loadReminders();productivityStatus('Reminder saved. Device notification scheduling is not yet available.');}catch(e){productivityStatus(e.message)}
+});
+document.querySelectorAll('[data-document-task]').forEach(button=>button.addEventListener('click',async()=>{
+ try{const result=await productivityRequest('/v1/assistant/documents/analyze',{method:'POST',body:JSON.stringify({text:document.getElementById('documentText').value,task:button.dataset.documentTask})});document.getElementById('documentResult').textContent=JSON.stringify(result.result,null,2);productivityStatus('Document text processed locally using simple rules.');}catch(e){productivityStatus(e.message)}
+}));
+document.getElementById('loadPermissions')?.addEventListener('click',async()=>{try{const result=await productivityRequest('/v1/assistant/permissions');document.getElementById('permissionResults').textContent=JSON.stringify(result,null,2);productivityStatus('Permission guidance loaded; check actual permissions in Android settings.');}catch(e){productivityStatus(e.message)}});
+async function saveWorkflow(type){
+ const input=document.getElementById('workflowInput').value;
+ const step=type==='summarize_text'?{type,input}:{type:'draft_message',input};
+ try{const result=await productivityRequest('/v1/assistant/workflows',{method:'POST',body:JSON.stringify({name:document.getElementById('workflowName').value,steps:[step]})});productivityStatus('Workflow saved as a draft; nothing has executed.');await loadWorkflows();}catch(e){productivityStatus(e.message)}
+}
+document.getElementById('saveSummaryWorkflow')?.addEventListener('click',()=>saveWorkflow('summarize_text'));
+document.getElementById('saveDraftWorkflow')?.addEventListener('click',()=>saveWorkflow('draft_message'));
+async function loadWorkflows(){
+ try{const data=await productivityRequest('/v1/assistant/workflows');const root=document.getElementById('workflowResults');root.replaceChildren();
+ if(!data.workflows.length){root.textContent='No workflows saved yet.';return;}
+ data.workflows.forEach(workflow=>{
+  const row=document.createElement('div');row.className='message';
+  const title=document.createElement('strong');title.textContent=workflow.name;
+  const meta=document.createElement('p');meta.textContent='Status: '+workflow.status+' · '+workflow.steps.length+' step(s)';
+  const preview=document.createElement('button');preview.type='button';preview.textContent='Preview only';
+  preview.addEventListener('click',async()=>{try{const result=await productivityRequest('/v1/assistant/workflows/'+encodeURIComponent(workflow.id)+'/preview',{method:'POST'});const out=document.createElement('pre');out.style.whiteSpace='pre-wrap';out.textContent=JSON.stringify(result.preview,null,2);row.append(out);}catch(e){productivityStatus(e.message)}});
+  const approve=document.createElement('button');approve.type='button';approve.textContent='Approve draft';approve.disabled=workflow.status!=='draft';
+  approve.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/workflows/'+encodeURIComponent(workflow.id)+'/approve',{method:'POST'});await loadWorkflows();productivityStatus('Approval recorded; execution remains disabled.');}catch(e){productivityStatus(e.message)}});
+  row.append(title,meta,preview,approve);root.append(row);
+ });
+ }catch(e){productivityStatus(e.message)}
+}
+if(!navigator.onLine) productivityStatus('Offline: the cached app shell may open, but account data and API tools need an internet connection.');
+window.addEventListener('offline',()=>productivityStatus('You are offline. Private account data is not cached; reconnect to sync.'));
+window.addEventListener('online',()=>productivityStatus('Connection restored. Refresh reminders or workflows to load server data.'));
 })();
 </script>
 <script>

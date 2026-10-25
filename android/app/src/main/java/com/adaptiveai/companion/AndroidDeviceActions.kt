@@ -1,6 +1,8 @@
 package com.adaptiveai.companion
 
 import android.content.ActivityNotFoundException
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -86,4 +88,43 @@ class AndroidDeviceActions(private val context: Context) {
     fun openAppSettings(): Boolean =
         launch(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.parse("package:" + context.packageName)), "Could not open app settings.")
+    /** Schedules a local Android notification. Android notification permission must be granted. */
+    @JavascriptInterface
+    fun scheduleReminder(reminderId: String?, title: String?, timestampMillis: Long): Boolean {
+        val safeId = reminderId?.trim()?.take(100).orEmpty()
+        val safeTitle = title?.trim()?.take(160).orEmpty()
+        if (safeId.isBlank() || safeTitle.isBlank() || timestampMillis <= System.currentTimeMillis()) return false
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(context, "Allow notifications in Android settings to receive reminders.", Toast.LENGTH_LONG).show()
+            return false
+        }
+        val intent = Intent(context, ReminderReceiver::class.java)
+            .putExtra("reminder_id", safeId)
+            .putExtra("reminder_title", safeTitle)
+        val pending = PendingIntent.getBroadcast(
+            context, safeId.hashCode() and 0x7fffffff, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestampMillis, pending)
+        return true
+    }
+
+    /** Cancels a previously scheduled local reminder on this device. */
+    @JavascriptInterface
+    fun cancelReminder(reminderId: String?): Boolean {
+        val safeId = reminderId?.trim()?.take(100).orEmpty()
+        if (safeId.isBlank()) return false
+        val intent = Intent(context, ReminderReceiver::class.java)
+        val pending = PendingIntent.getBroadcast(
+            context, safeId.hashCode() and 0x7fffffff, intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        ) ?: return false
+        val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarm.cancel(pending)
+        pending.cancel()
+        return true
+    }
+
 }

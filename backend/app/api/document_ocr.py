@@ -29,18 +29,25 @@ async def ocr_pdf(request: Request, file: UploadFile = File(...)):
         if document.page_count > MAX_PAGES:
             raise HTTPException(status_code=413, detail=f"OCR is limited to {MAX_PAGES} pages per request.")
         output, total = [], 0
-        for index, page in enumerate(document):
-            # Render at 1.5x for reasonable OCR accuracy without large image allocations.
-            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
-            if pix.width * pix.height > MAX_PIXELS:
-                raise HTTPException(status_code=413, detail=f"Page {index + 1} is too large to OCR safely.")
-            image = Image.open(BytesIO(pix.tobytes("png")))
-            text = pytesseract.image_to_string(image, timeout=20)
-            text = text[:max(0, MAX_CHARS - total)]
-            output.append({"page": index + 1, "text": text})
-            total += len(text)
-            if total >= MAX_CHARS:
-                break
+        try:
+            for index, page in enumerate(document):
+                # Check predicted dimensions before rendering to avoid allocating huge pixmaps.
+                rect = page.rect
+                scale = 1.5
+                predicted_width = int(rect.width * scale)
+                predicted_height = int(rect.height * scale)
+                if predicted_width <= 0 or predicted_height <= 0 or predicted_width * predicted_height > MAX_PIXELS:
+                    raise HTTPException(status_code=413, detail=f"Page {index + 1} is too large to OCR safely.")
+                pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+                image = Image.open(BytesIO(pix.tobytes("png")))
+                text = pytesseract.image_to_string(image, timeout=20)
+                text = text[:max(0, MAX_CHARS - total)]
+                output.append({"page": index + 1, "text": text})
+                total += len(text)
+                if total >= MAX_CHARS:
+                    break
+        finally:
+            document.close()
         combined = "\n\n".join(f"[Page {p['page']}]\n{p['text']}" for p in output)
         return {"filename": (file.filename or "document.pdf")[:200], "page_count": document.page_count,
                 "processed_pages": len(output), "text": combined, "character_count": len(combined),

@@ -75,3 +75,34 @@ def activate(plugin_id: str, request: Request):
     if not result.rowcount:
         raise HTTPException(status_code=409, detail="Plugin must be approved before activation.")
     return {"activated":True,"id":plugin_id,"status":"active","execution_model":"allow-listed built-ins only","user_code_execution":False}
+
+class RunInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    capability: str
+    input: str = Field(max_length=12000)
+
+@router.post("/plugins/{plugin_id}/run")
+def run_plugin(plugin_id: str, body: RunInput, request: Request):
+    import re
+    user = require_user(request)
+    _tables()
+    with _ready_engine().connect() as conn:
+        row = conn.execute(text("""SELECT capabilities_json,status FROM adaptive_safe_plugins
+        WHERE id=:id AND user_id=:uid"""), {"id":plugin_id,"uid":user["id"]}).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Plugin not found.")
+    if row["status"] != "active":
+        raise HTTPException(status_code=409, detail="Plugin is not active.")
+    if body.capability not in json.loads(row["capabilities_json"]):
+        raise HTTPException(status_code=403, detail="Capability was not approved for this plugin.")
+    value = body.input
+    if body.capability == "count_words":
+        result = {"word_count":len(re.findall(r"\\S+",value)),"character_count":len(value)}
+    elif body.capability == "extract_bullets":
+        result = {"bullets":[line.strip(" \\t-*•") for line in value.splitlines() if line.strip()][:100]}
+    elif body.capability == "draft_message":
+        result = {"draft":value,"sent":False}
+    else:
+        raise HTTPException(status_code=422, detail="Unsupported built-in capability.")
+    return {"plugin_id":plugin_id,"capability":body.capability,"result":result,
+            "executed":True,"execution_mode":"fixed-built-in-allowlist","user_code_executed":False}

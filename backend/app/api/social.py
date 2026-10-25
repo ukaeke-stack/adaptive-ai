@@ -11,11 +11,11 @@ from app.security.sessions import require_user
 
 router = APIRouter(prefix="/v1/social", tags=["social"])
 PROVIDERS = {
- "instagram": {"id":"INSTAGRAM_CLIENT_ID","secret":"INSTAGRAM_CLIENT_SECRET","redirect":"INSTAGRAM_REDIRECT_URI","authorize":"https://www.instagram.com/oauth/authorize","token":"https://api.instagram.com/oauth/access_token","scope":"user_profile,user_media","pkce":False},
+ "instagram": {"id":"INSTAGRAM_CLIENT_ID","secret":"INSTAGRAM_CLIENT_SECRET","redirect":"INSTAGRAM_REDIRECT_URI","authorize":"https://www.instagram.com/oauth/authorize","token":"https://api.instagram.com/oauth/access_token","scope":"instagram_business_basic","pkce":False},
  "facebook": {"id":"FACEBOOK_CLIENT_ID","secret":"FACEBOOK_CLIENT_SECRET","redirect":"FACEBOOK_REDIRECT_URI","authorize":"https://www.facebook.com/v22.0/dialog/oauth","token":"https://graph.facebook.com/v22.0/oauth/access_token","scope":"public_profile,email","pkce":False},
  "x": {"id":"X_CLIENT_ID","secret":"X_CLIENT_SECRET","redirect":"X_REDIRECT_URI","authorize":"https://twitter.com/i/oauth2/authorize","token":"https://api.twitter.com/2/oauth2/token","scope":"users.read tweet.read offline.access","pkce":True},
  "youtube": {"id":"GOOGLE_CLIENT_ID","secret":"GOOGLE_CLIENT_SECRET","redirect":"YOUTUBE_REDIRECT_URI","authorize":"https://accounts.google.com/o/oauth2/v2/auth","token":"https://oauth2.googleapis.com/token","scope":"openid email profile https://www.googleapis.com/auth/youtube.readonly","pkce":True},
- "tiktok": {"id":"TIKTOK_CLIENT_KEY","secret":"TIKTOK_CLIENT_SECRET","redirect":"TIKTOK_REDIRECT_URI","authorize":"https://www.tiktok.com/v2/auth/authorize/","token":"https://open.tiktokapis.com/v2/oauth/token/","scope":"user.info.basic,video.list","pkce":True},
+ "tiktok": {"id":"TIKTOK_CLIENT_KEY","secret":"TIKTOK_CLIENT_SECRET","redirect":"TIKTOK_REDIRECT_URI","authorize":"https://www.tiktok.com/v2/auth/authorize/","token":"https://open.tiktokapis.com/v2/oauth/token/","scope":"user.info.basic,video.list","pkce":False},
 }
 
 def _ensure_tables():
@@ -152,7 +152,7 @@ def connected_profile(provider: str, request: Request):
  try: token=json.loads(cipher.decrypt(row["token_ciphertext"].encode()).decode())
  except Exception as exc: raise HTTPException(status_code=500,detail="Stored social token could not be decrypted. Contact the service administrator.") from exc
  access=token.get("access_token","")
- if provider=="instagram": data=_get_json("https://graph.instagram.com/me?fields=id,username",access)
+ if provider=="instagram": data=_get_json("https://graph.instagram.com/me?fields=user_id,username",access)
  elif provider=="facebook": data=_get_json("https://graph.facebook.com/me?fields=id,name",access)
  elif provider=="x": data=_get_json("https://api.twitter.com/2/users/me?user.fields=name,username",access).get("data",{})
  elif provider=="youtube":
@@ -161,5 +161,5 @@ def connected_profile(provider: str, request: Request):
   data={"channel_id":items[0].get("id"),"title":items[0].get("snippet",{}).get("title")} if items else {}
  elif provider=="tiktok": data=_get_json("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,username",access).get("data",{}).get("user",{})
  else: raise HTTPException(status_code=404,detail="Unsupported social provider")
- safe={k:data[k] for k in ("id","username","name","display_name","open_id","channel_id","title") if isinstance(data,dict) and k in data}
+ safe={k:data[k] for k in ("id","user_id","username","name","display_name","open_id","channel_id","title") if isinstance(data,dict) and k in data}
  return {"provider":provider,"connected":True,"profile":safe}

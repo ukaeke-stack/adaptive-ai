@@ -2,7 +2,7 @@
 
 A staged, safety-first personal AI assistant project. The repository contains a FastAPI backend, an allowlisted calculator tool, automated tests, a Groq chat provider adapter, SQLite/PostgreSQL conversation history, and a shared bearer-token guard.
 
-The chat API requires a Groq API key configured privately on the server. Android automation and safe plugin generation are not implemented yet.
+The chat API requires a Groq API key configured privately on the server. The Android client now includes a limited native action bridge for opening music, the dialer, an SMS draft, contacts, camera and video capture. These actions open Android/system UI and do not silently send messages or place calls. Full cross-app automation, safe plugin generation, self-updating code, and public multi-user hardening are not implemented.
 
 ## Run locally
 ```bash
@@ -53,7 +53,9 @@ pytest -q
 
 ## Safety limitations
 - Tool execution is allowlist-only; arbitrary code, shell commands, and dynamic plugin execution are not supported.
-- Android actions will require explicit device permissions and user-visible safeguards.
+- The native Android action bridge is intentionally allowlisted. Calling opens the dialer; messaging opens a draft; camera and video actions launch the system camera UI. It does not silently place calls, send messages, or capture media in the background.
+- This native bridge is exposed as `window.AdaptiveDevice` in the Android WebView. The web app must explicitly map assistant intent to these methods; adding the bridge alone does not make the language model autonomously invoke actions.
+- Cross-app automation, controlled code updates, sandboxed plugin activation, and account-level multi-user security are still pending.
 - Generated functions will need sandboxing, tests, versioning, and rollback before any activation.
 
 ## Roadmap

@@ -220,9 +220,9 @@ function runNativePhoneCommand(message){
  if(/^(?:please\s+)?(?:play|open)\s+(?:my\s+)?music[.!?]*$/i.test(text)){const ok=device.openMusic();addBubble('assistant',ok?'Opening a music app. Playback controls depend on the music app available on your phone.':'Could not open a music app.');return true}
  if(/^(?:please\s+)?(?:open|show)\s+(?:my\s+)?(?:phonebook|phone book|contacts)[.!?]*$/i.test(text)){const ok=device.openContacts();addBubble('assistant',ok?'Opening your contacts app. Contact details remain on your phone.':'Could not open contacts.');return true}
  if(/^(?:please\s+)?(?:read|show|open)\s+(?:my\s+)?(?:text )?messages(?: inbox)?[.!?]*$/i.test(text)){const ok=device.openMessages();addBubble('assistant',ok?'Opening your messaging app so you can read your inbox. Message access is not copied to Norah.':'Could not open your messaging app.');return true}
- if(/^(?:please\\s+)?(?:take|capture)\\s+(?:a\\s+)?(?:photo|picture)[.!?]*$/i.test(text)){showVisionModal();addBubble('assistant','Opening Norah camera. Capture a photo in the preview, then choose Analyze image to send it to Norah.');return true}
- if(/^(?:please\\s+)?(?:record|take|start recording)\\s+(?:a\\s+)?video[.!?]*$/i.test(text)){showVisionModal();addBubble('assistant','Camera opened. Tap Start video recording, then Stop recording. Tap Save video to download the recording.');return true}
- if(/^(?:please\\s+)?(?:open|turn on|launch)\\s+(?:my\\s+)?camera[.!?]*$/i.test(text)){showVisionModal();addBubble('assistant','Opening Norah camera preview. You can capture a photo for analysis or record a video.');return true}
+ if(/^(?:please\s+)?(?:take|capture)\s+(?:a\s+)?(?:photo|picture)[.!?]*$/i.test(text)){showVisionModal();addBubble('assistant','Opening Norah camera. Capture a photo in the preview, then choose Analyze image to send it to Norah.');return true}
+ if(/^(?:please\s+)?(?:record|take|start recording)\s+(?:a\s+)?video[.!?]*$/i.test(text)){showVisionModal();addBubble('assistant','Camera opened. Tap Start video recording, then Stop recording. Tap Save video to download the recording.');return true}
+ if(/^(?:please\s+)?(?:open|turn on|launch)\s+(?:my\s+)?camera[.!?]*$/i.test(text)){showVisionModal();addBubble('assistant','Opening Norah camera preview. You can capture a photo for analysis or record a video.');return true}
  if(/^(?:please\s+)?open\s+(?:adaptive ai|norah)\s+app settings[.!?]*$/i.test(text)){const ok=device.openAppSettings();addBubble('assistant',ok?'Opening Adaptive AI app settings.':'Could not open app settings.');return true}
  return false
 }

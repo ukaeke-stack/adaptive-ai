@@ -35,3 +35,21 @@ def test_productivity_routes_are_registered():
     assert "/v1/assistant/documents/analyze" in schema["paths"]
     assert "/v1/assistant/documents/extract-pdf" in schema["paths"]
     assert "/v1/assistant/workflows/{workflow_id}/preview" in schema["paths"]
+
+def test_ocr_and_safe_lifecycle_routes_are_registered():
+    schema = client.get("/openapi.json").json()
+    assert "/v1/assistant/documents/ocr-pdf" in schema["paths"]
+    assert "/v1/plugin-runtime/proposals" in schema["paths"]
+    assert "/v1/plugin-runtime/plugins/{plugin_id}/approve" in schema["paths"]
+    assert "/v1/plugin-runtime/plugins/{plugin_id}/activate" in schema["paths"]
+    assert "/v1/plugin-runtime/plugins/{plugin_id}/run" in schema["paths"]
+    assert "/v1/updates/releases/{release_id}/approve" in schema["paths"]
+    assert "/v1/updates/rollback-plan" in schema["paths"]
+
+
+def test_social_oauth_routes_are_registered():
+    schema = client.get("/openapi.json").json()
+    assert "/v1/social/{provider}/connect" in schema["paths"]
+    assert "/v1/social/{provider}/callback" in schema["paths"]
+    assert "/v1/social/{provider}/disconnect" in schema["paths"]
+    assert "/v1/social/{provider}/profile" in schema["paths"]

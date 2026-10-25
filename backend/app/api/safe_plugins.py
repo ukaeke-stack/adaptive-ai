@@ -1,0 +1,77 @@
+"""Declarative plugin lifecycle. Only allow-listed built-in capabilities may be activated."""
+import json
+from datetime import datetime, timezone
+from uuid import uuid4
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
+from app.memory.store import _ready_engine
+from app.security.sessions import require_user
+
+router = APIRouter(prefix="/v1/plugin-runtime", tags=["safe plugin runtime"])
+ALLOWED = {"count_words", "extract_bullets", "draft_message"}
+
+def _tables():
+    with _ready_engine().begin() as conn:
+        conn.execute(text("""CREATE TABLE IF NOT EXISTS adaptive_safe_plugins (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL,
+        capabilities_json TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
+        reviewed_by TEXT, reviewed_at TEXT)"""))
+
+class Manifest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=3, max_length=48)
+    capabilities: list[str] = Field(min_length=1, max_length=3)
+
+@router.post("/proposals")
+def propose(body: Manifest, request: Request):
+    user = require_user(request)
+    if len(set(body.capabilities)) != len(body.capabilities) or set(body.capabilities) - ALLOWED:
+        raise HTTPException(status_code=422, detail="Only unique allow-listed built-in capabilities are accepted.")
+    _tables()
+    pid, now = str(uuid4()), datetime.now(timezone.utc).isoformat()
+    with _ready_engine().begin() as conn:
+        conn.execute(text("""INSERT INTO adaptive_safe_plugins
+        (id,user_id,name,capabilities_json,status,created_at)
+        VALUES (:id,:uid,:name,:caps,'pending_review',:at)"""),
+        {"id":pid,"uid":user["id"],"name":body.name.strip(),"caps":json.dumps(body.capabilities),"at":now})
+    return {"id":pid,"name":body.name.strip(),"capabilities":body.capabilities,"status":"pending_review","executable":False}
+
+@router.get("/plugins")
+def list_plugins(request: Request):
+    user = require_user(request)
+    _tables()
+    with _ready_engine().connect() as conn:
+        rows = conn.execute(text("""SELECT id,name,capabilities_json,status,created_at,reviewed_at
+        FROM adaptive_safe_plugins WHERE user_id=:uid ORDER BY created_at DESC LIMIT 100"""),
+        {"uid":user["id"]}).mappings().all()
+    return {"plugins":[{"id":r["id"],"name":r["name"],"capabilities":json.loads(r["capabilities_json"]),
+    "status":r["status"],"created_at":r["created_at"],"reviewed_at":r["reviewed_at"],
+    "executable":r["status"]=="active"} for r in rows]}
+
+@router.post("/plugins/{plugin_id}/approve")
+def approve(plugin_id: str, request: Request):
+    user = require_user(request)
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only the platform owner can approve plugins.")
+    _tables()
+    now = datetime.now(timezone.utc).isoformat()
+    with _ready_engine().begin() as conn:
+        result = conn.execute(text("""UPDATE adaptive_safe_plugins SET status='approved',
+        reviewed_by=:reviewer,reviewed_at=:at WHERE id=:id AND status='pending_review'"""),
+        {"reviewer":user["id"],"at":now,"id":plugin_id})
+    if not result.rowcount:
+        raise HTTPException(status_code=404, detail="Pending plugin proposal not found.")
+    return {"approved":True,"id":plugin_id,"status":"approved","activation_required":True}
+
+@router.post("/plugins/{plugin_id}/activate")
+def activate(plugin_id: str, request: Request):
+    user = require_user(request)
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only the platform owner can activate plugins.")
+    _tables()
+    with _ready_engine().begin() as conn:
+        result = conn.execute(text("UPDATE adaptive_safe_plugins SET status='active' WHERE id=:id AND status='approved'"), {"id":plugin_id})
+    if not result.rowcount:
+        raise HTTPException(status_code=409, detail="Plugin must be approved before activation.")
+    return {"activated":True,"id":plugin_id,"status":"active","execution_model":"allow-listed built-ins only","user_code_execution":False}

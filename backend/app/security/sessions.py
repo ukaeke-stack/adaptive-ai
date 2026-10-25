@@ -182,6 +182,18 @@ class OwnerEnrollment(BaseModel):
         return " ".join(value.split())
 
 
+class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
+    full_name: str = Field(min_length=3, max_length=120)
+    password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("full_name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        return " ".join(value.split())
+
+
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: EmailStr
@@ -237,6 +249,38 @@ def enroll_owner(body: OwnerEnrollment, request: Request, response: Response):
     _cookie(response, token)
     return {"authenticated": True, "user": {"email": owner_email, "full_name": owner_name, "role": "owner"},
             "message": "Owner account enrolled. Save your replacement recovery code securely."}
+
+
+@router.post("/register")
+def register(body: RegisterRequest, request: Request, response: Response):
+    _check_origin(request)
+    if os.getenv("ADAPTIVE_AI_PUBLIC_SIGNUP_ENABLED", "false").strip().lower() != "true":
+        raise HTTPException(status_code=503, detail="Public registration is disabled by the service administrator.")
+    email = body.email.lower()
+    full_name = " ".join(body.full_name.split())
+    if len(full_name) < 3:
+        raise HTTPException(status_code=422, detail="Full name must contain at least three characters.")
+    engine = _ready_engine()
+    user_id = str(uuid4())
+    now = _stamp(_now())
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("""
+                INSERT INTO adaptive_users(id,email,full_name,phone,password_hash,role,phone_verified,created_at)
+                VALUES (:id,:email,:name,NULL,:password_hash,'user',0,:created)
+            """), {"id": user_id, "email": email, "name": full_name,
+                   "password_hash": _hash_password(body.password), "created": now})
+            token = secrets.token_urlsafe(48)
+            connection.execute(text("""
+                INSERT INTO adaptive_sessions(token_hash,user_id,expires_at,created_at)
+                VALUES (:hash,:uid,:expires,:created)
+            """), {"hash": _hash_secret(token), "uid": user_id,
+                   "expires": _stamp(_now() + timedelta(hours=SESSION_HOURS)), "created": now})
+    except Exception as exc:
+        # Avoid leaking database details or whether a specific email is registered.
+        raise HTTPException(status_code=409, detail="Account could not be created. Check the details or sign in if the account already exists.") from exc
+    _cookie(response, token)
+    return {"authenticated": True, "user": {"id": user_id, "email": email, "full_name": full_name, "role": "user"}}
 
 
 @router.post("/login")

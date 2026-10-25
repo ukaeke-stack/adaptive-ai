@@ -7,7 +7,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import androidx.core.app.NotificationCompat
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -26,14 +25,13 @@ class ReminderReceiver : BroadcastReceiver() {
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, channelId)
+        val notification = android.app.Notification.Builder(context, channelId)
             .setSmallIcon(R.drawable.norah_launcher)
             .setContentTitle("Adaptive AI reminder")
             .setContentText(title)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(title))
+            .setStyle(android.app.Notification.BigTextStyle().bigText(title))
             .setContentIntent(openApp)
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         manager.notify(reminderId.hashCode() and 0x7fffffff, notification)
     }

@@ -303,5 +303,10 @@ window.addEventListener('pagehide',stopVisionCamera);
 if(!('speechSynthesis'in window)&&!(window.AdaptiveNative&&typeof window.AdaptiveNative.speak==='function')){$('voiceSupport').textContent='Android speech output will be used when available.'}
 })();
 </script>
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/app/service-worker.js').catch(() => {}));
+}
+</script>
 </body>
 </html>

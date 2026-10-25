@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.ai.provider import generate_reply, ProviderNotConfigured, ProviderRequestError
 from app.memory.store import create_conversation, conversation_exists, add_message, get_messages
+from app.security.sessions import require_user
 
 router = APIRouter(prefix="/v1")
 
@@ -21,10 +22,11 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-def chat(request: ChatRequest):
-    conversation = create_conversation() if request.conversation_id is None else None
+def chat(request: ChatRequest, http_request: Request):
+    user = require_user(http_request)
+    conversation = create_conversation(user_id=user["id"]) if request.conversation_id is None else None
     conversation_id = conversation["id"] if conversation else request.conversation_id
-    if not conversation and not conversation_exists(conversation_id):
+    if not conversation and not conversation_exists(conversation_id, user_id=user["id"]):
         raise HTTPException(status_code=404, detail="Conversation not found")
     history = get_messages(conversation_id, limit=20)
     add_message(conversation_id, "user", request.message)

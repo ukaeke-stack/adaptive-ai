@@ -365,9 +365,9 @@ function renderReminderList(data){
   const meta=document.createElement('p');meta.textContent=(item.due_at||'No date set')+' · '+item.status;
   const done=document.createElement('button');done.type='button';done.textContent='Complete';
   done.disabled=item.status!=='active';
-  done.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/reminders/'+encodeURIComponent(item.id)+'?status=completed',{method:'PATCH'});await loadReminders();}catch(e){productivityStatus(e.message)}});
+  done.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/reminders/'+encodeURIComponent(item.id)+'?status=completed',{method:'PATCH'});if(window.AdaptiveDevice&&typeof window.AdaptiveDevice.cancelReminder==='function')window.AdaptiveDevice.cancelReminder(item.id);await loadReminders();}catch(e){productivityStatus(e.message)}});
   const remove=document.createElement('button');remove.type='button';remove.textContent='Delete';
-  remove.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/reminders/'+encodeURIComponent(item.id),{method:'DELETE'});await loadReminders();}catch(e){productivityStatus(e.message)}});
+  remove.addEventListener('click',async()=>{try{await productivityRequest('/v1/assistant/reminders/'+encodeURIComponent(item.id),{method:'DELETE'});if(window.AdaptiveDevice&&typeof window.AdaptiveDevice.cancelReminder==='function')window.AdaptiveDevice.cancelReminder(item.id);await loadReminders();}catch(e){productivityStatus(e.message)}});
   row.append(title,meta,done,remove);root.append(row);
  });
 }
@@ -375,7 +375,7 @@ async function loadReminders(){try{renderReminderList(await productivityRequest(
 document.getElementById('reminderForm')?.addEventListener('submit',async event=>{
  event.preventDefault();
  const due=document.getElementById('reminderDue').value;
- try{await productivityRequest('/v1/assistant/reminders',{method:'POST',body:JSON.stringify({title:document.getElementById('reminderTitle').value,due_at:due?new Date(due).toISOString():null,notes:document.getElementById('reminderNotes').value})});event.target.reset();await loadReminders();productivityStatus('Reminder saved. Device notification scheduling is not yet available.');}catch(e){productivityStatus(e.message)}
+ try{const saved=await productivityRequest('/v1/assistant/reminders',{method:'POST',body:JSON.stringify({title:document.getElementById('reminderTitle').value,due_at:due?new Date(due).toISOString():null,notes:document.getElementById('reminderNotes').value})});let notice='Reminder saved to your account.';if(due&&window.AdaptiveDevice&&typeof window.AdaptiveDevice.scheduleReminder==='function'){const scheduled=window.AdaptiveDevice.scheduleReminder(saved.reminder.id,saved.reminder.title,Date.parse(saved.reminder.due_at));notice+=scheduled?' A local notification was scheduled on this device.':' The reminder is saved, but this device did not schedule its notification; check notification permission and the date/time.';}else if(due){notice+=' Local notifications are available in the Android app; this browser cannot schedule Android notifications.';}event.target.reset();await loadReminders();productivityStatus(notice);}catch(e){productivityStatus(e.message)}
 });
 document.querySelectorAll('[data-document-task]').forEach(button=>button.addEventListener('click',async()=>{
  const textValue=document.getElementById('documentText').value, task=button.dataset.documentTask;

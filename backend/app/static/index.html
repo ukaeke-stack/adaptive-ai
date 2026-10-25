@@ -378,7 +378,16 @@ document.getElementById('reminderForm')?.addEventListener('submit',async event=>
  try{await productivityRequest('/v1/assistant/reminders',{method:'POST',body:JSON.stringify({title:document.getElementById('reminderTitle').value,due_at:due?new Date(due).toISOString():null,notes:document.getElementById('reminderNotes').value})});event.target.reset();await loadReminders();productivityStatus('Reminder saved. Device notification scheduling is not yet available.');}catch(e){productivityStatus(e.message)}
 });
 document.querySelectorAll('[data-document-task]').forEach(button=>button.addEventListener('click',async()=>{
- try{const result=await productivityRequest('/v1/assistant/documents/analyze',{method:'POST',body:JSON.stringify({text:document.getElementById('documentText').value,task:button.dataset.documentTask})});document.getElementById('documentResult').textContent=JSON.stringify(result.result,null,2);productivityStatus('Document text processed by built-in text rules on the Adaptive AI server; it is not sent to a third-party AI provider.');}catch(e){productivityStatus(e.message)}
+ const textValue=document.getElementById('documentText').value, task=button.dataset.documentTask;
+ if(!navigator.onLine){
+  const words=textValue.trim()?textValue.trim().split(/\\s+/):[];
+  let result={};
+  if(task==='count_words') result={word_count:words.length,character_count:textValue.length,paragraph_count:textValue.split(/\\n+/).filter(line=>line.trim()).length};
+  else if(task==='extract_bullets') result={bullets:textValue.split(/\\n+/).map(line=>line.trim().replace(/^[\\s*•-]+/,'')).filter(Boolean).slice(0,100)};
+  else result={summary:textValue.split(/(?<=[.!?])\\s+/).slice(0,words.length>120?5:3).join(' ').slice(0,3000),note:'Offline extractive summary using simple browser rules; no AI inference.'};
+  document.getElementById('documentResult').textContent=JSON.stringify(result,null,2);productivityStatus('Offline document tool used in this browser. No text was sent to the server.');return;
+ }
+ try{const result=await productivityRequest('/v1/assistant/documents/analyze',{method:'POST',body:JSON.stringify({text:textValue,task})});document.getElementById('documentResult').textContent=JSON.stringify(result.result,null,2);productivityStatus('Document text processed by built-in text rules on the Adaptive AI server; it is not sent to a third-party AI provider.');}catch(e){productivityStatus(e.message)}
 }));
 document.getElementById('loadPermissions')?.addEventListener('click',async()=>{try{const result=await productivityRequest('/v1/assistant/permissions');document.getElementById('permissionResults').textContent=JSON.stringify(result,null,2);productivityStatus('Permission guidance loaded; check actual permissions in Android settings.');}catch(e){productivityStatus(e.message)}});
 async function saveWorkflow(type){

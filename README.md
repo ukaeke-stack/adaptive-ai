@@ -65,3 +65,9 @@ pytest -q
 4. Sandboxed plugin generation, validation, staged activation, and rollback.
 5. Limited Android-native integrations with user-granted permissions.
 6. Account-level identity and conversation ownership, distributed rate limiting, monitoring, backups, and recovery.
+
+
+## Assistant productivity features
+The authenticated `/v1/assistant` API provides user-scoped reminders, deterministic document-text operations, permission guidance, and reusable workflow drafts. Reminder records are persisted, but **the server does not schedule Android notifications yet**. Document text operations accept pasted text (up to 100,000 characters) and use deterministic server-side rules; they do not upload files or call an external AI provider. Workflow steps are limited to summarization, message drafting, and reminder proposals; preview and approval do not execute actions, send messages, or schedule notifications.
+
+The web interface includes a permission guidance dashboard. It cannot directly determine Android runtime permission grants; verify those in Android Settings. A service worker caches only the app shell for offline opening and explicitly avoids caching API/authenticated data. Account data, chat, reminders, and workflows still require a network connection. No arbitrary plugin code executes and no self-deployment is enabled.

@@ -10,6 +10,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONObject
@@ -24,6 +25,10 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
     @Volatile private var webView: WebView? = null
     private var recognizer: SpeechRecognizer? = null
     @Volatile private var listening = false
+    @Volatile var overlayTextListener: ((String) -> Unit)? = null
+    @Volatile var overlayListeningListener: (() -> Unit)? = null
+    @Volatile var overlayTextProgressListener: ((Float) -> Unit)? = null
+    @Volatile private var speakingLength = 1
     private lateinit var engine: TextToSpeech
 
     init {
@@ -34,33 +39,58 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
             pendingText = null
             if (engineReady && queued != null) speakNow(queued)
         }
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) {
+                mainHandler.post { overlayTextProgressListener?.invoke(1f) }
+            }
+            override fun onError(utteranceId: String?) {}
+            override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
+                val progress = (end.toFloat() / speakingLength.coerceAtLeast(1)).coerceIn(0f, 1f)
+                mainHandler.post { overlayTextProgressListener?.invoke(progress) }
+            }
+        })
         if (SpeechRecognizer.isRecognitionAvailable(appContext)) {
             mainHandler.post {
                 recognizer = SpeechRecognizer.createSpeechRecognizer(appContext).apply {
                     setRecognitionListener(object : RecognitionListener {
                         override fun onReadyForSpeech(params: Bundle?) {
                             listening = true
+                            mainHandler.post { overlayListeningListener?.invoke() }
                             notifyPage("onListening", "")
                         }
                         override fun onBeginningOfSpeech() {}
                         override fun onRmsChanged(rmsdB: Float) {}
                         override fun onBufferReceived(buffer: ByteArray?) {}
-                        override fun onEndOfSpeech() {}
+                        override fun onEndOfSpeech() {
+                            mainHandler.post { overlayTextListener?.invoke("Processing your speech…") }
+                        }
                         override fun onError(error: Int) {
                             listening = false
-                            notifyPage("onError", errorMessage(error))
+                            val message = errorMessage(error)
+                            mainHandler.post { overlayTextListener?.invoke(message) }
+                            notifyPage("onError", message)
                         }
                         override fun onResults(results: Bundle?) {
                             listening = false
                             val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                                 ?.firstOrNull()?.trim().orEmpty()
-                            if (spoken.isNotEmpty()) notifyPage("onResult", spoken)
-                            else notifyPage("onError", "I didn't catch that. Tap the microphone and try again.")
+                            if (spoken.isNotEmpty()) {
+                                mainHandler.post { overlayTextListener?.invoke("Heard: $spoken\nSending to Norah…") }
+                                notifyPage("onResult", spoken)
+                            } else {
+                                val message = "I didn't catch that. Tap the robot and try again."
+                                mainHandler.post { overlayTextListener?.invoke(message) }
+                                notifyPage("onError", message)
+                            }
                         }
                         override fun onPartialResults(partialResults: Bundle?) {
                             val spoken = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                                 ?.firstOrNull()?.trim().orEmpty()
-                            if (spoken.isNotEmpty()) notifyPage("onPartial", spoken)
+                            if (spoken.isNotEmpty()) {
+                                mainHandler.post { overlayTextListener?.invoke("Hearing: $spoken") }
+                                notifyPage("onPartial", spoken)
+                            }
                         }
                         override fun onEvent(eventType: Int, params: Bundle?) {}
                     })
@@ -90,32 +120,49 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
     }
 
     @JavascriptInterface
+    fun showOverlayText(text: String?) {
+        val safe = text?.take(12000)?.trim().orEmpty()
+        if (safe.isEmpty()) return
+        mainHandler.post { overlayTextListener?.invoke(safe) }
+    }
+
+    @JavascriptInterface
     fun startListening(): Boolean {
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
             notifyPage("onError", "Android speech recognition is unavailable on this phone.")
             return false
         }
         mainHandler.post {
+            overlayListeningListener?.invoke()
             try {
                 if (listening) recognizer?.cancel()
                 if (recognizer == null) {
                     recognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
                     recognizer?.setRecognitionListener(object : RecognitionListener {
-                        override fun onReadyForSpeech(params: Bundle?) { listening = true; notifyPage("onListening", "") }
+                        override fun onReadyForSpeech(params: Bundle?) { listening = true; overlayListeningListener?.invoke(); notifyPage("onListening", "") }
                         override fun onBeginningOfSpeech() {}
                         override fun onRmsChanged(rmsdB: Float) {}
                         override fun onBufferReceived(buffer: ByteArray?) {}
                         override fun onEndOfSpeech() {}
-                        override fun onError(error: Int) { listening = false; notifyPage("onError", errorMessage(error)) }
+                        override fun onError(error: Int) { listening = false; val message = errorMessage(error); overlayTextListener?.invoke(message); notifyPage("onError", message) }
                         override fun onResults(results: Bundle?) {
                             listening = false
                             val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
-                            if (spoken.isNotEmpty()) notifyPage("onResult", spoken)
-                            else notifyPage("onError", "I didn't catch that. Tap the microphone and try again.")
+                            if (spoken.isNotEmpty()) {
+                                overlayTextListener?.invoke("Heard: $spoken\nSending to Norah…")
+                                notifyPage("onResult", spoken)
+                            } else {
+                                val message = "I didn't catch that. Tap the robot and try again."
+                                overlayTextListener?.invoke(message)
+                                notifyPage("onError", message)
+                            }
                         }
                         override fun onPartialResults(partialResults: Bundle?) {
                             val spoken = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
-                            if (spoken.isNotEmpty()) notifyPage("onPartial", spoken)
+                            if (spoken.isNotEmpty()) {
+                                overlayTextListener?.invoke("Hearing: $spoken")
+                                notifyPage("onPartial", spoken)
+                            }
                         }
                         override fun onEvent(eventType: Int, params: Bundle?) {}
                     })
@@ -156,8 +203,10 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
         return engine.setLanguage(selected) >= TextToSpeech.LANG_AVAILABLE
     }
 
-    private fun speakNow(text: String): Boolean =
-        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "norah-reply") == TextToSpeech.SUCCESS
+    private fun speakNow(text: String): Boolean {
+        speakingLength = text.length.coerceAtLeast(1)
+        return engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "norah-reply") == TextToSpeech.SUCCESS
+    }
 
     @JavascriptInterface
     fun speak(text: String?): Boolean {
@@ -189,5 +238,8 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
             initializationComplete = true
         }
         webView = null
+        overlayTextListener = null
+        overlayTextProgressListener = null
+        overlayListeningListener = null
     }
 }

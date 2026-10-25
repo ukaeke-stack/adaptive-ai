@@ -26,7 +26,9 @@ async def ocr_pdf(request: Request, file: UploadFile = File(...)):
         document = fitz.open(stream=data, filetype="pdf")
         if document.is_encrypted:
             raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported.")
-        if document.page_count > MAX_PAGES:
+        page_count = document.page_count
+        if page_count > MAX_PAGES:
+            document.close()
             raise HTTPException(status_code=413, detail=f"OCR is limited to {MAX_PAGES} pages per request.")
         output, total = [], 0
         try:
@@ -49,7 +51,7 @@ async def ocr_pdf(request: Request, file: UploadFile = File(...)):
         finally:
             document.close()
         combined = "\n\n".join(f"[Page {p['page']}]\n{p['text']}" for p in output)
-        return {"filename": (file.filename or "document.pdf")[:200], "page_count": document.page_count,
+        return {"filename": (file.filename or "document.pdf")[:200], "page_count": page_count,
                 "processed_pages": len(output), "text": combined, "character_count": len(combined),
                 "method": "local-tesseract-ocr", "truncated": total >= MAX_CHARS}
     except HTTPException:

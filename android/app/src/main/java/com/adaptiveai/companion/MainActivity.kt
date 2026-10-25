@@ -33,6 +33,7 @@ class MainActivity : Activity() {
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             addJavascriptInterface(speechBridge, "AdaptiveNative")
+            addJavascriptInterface(AndroidDeviceActions(this@MainActivity), "AdaptiveDevice")
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = WebViewClient()

@@ -159,11 +159,30 @@ function speakReply(text){
 }
 if('speechSynthesis'in window){window.speechSynthesis.getVoices();window.speechSynthesis.onvoiceschanged=()=>window.speechSynthesis.getVoices()}
 function setBusy(v){busy=v;sendButton.disabled=v;input.disabled=v;setState(v?'thinking':'idle',v?'Thinking…':'Ready when you are',v?'Working on your message.':'Type a message or use your microphone to speak.')}
+function runNativePhoneCommand(message){
+ const device=window.AdaptiveDevice;
+ if(!device)return false;
+ const text=message.trim();
+ const call=text.match(/^(?:please\\s+)?(?:call|phone|dial)\\s+([+0-9][+0-9()\\s*-]{4,38})[.!?]*$/i);
+ if(call){const ok=device.makeCall(call[1]);addBubble('assistant',ok?'Opening the phone dialer with '+call[1]+'. Review the number and place the call yourself.':'Could not open the phone dialer.');return true}
+ const sms=text.match(/^(?:please\\s+)?(?:send|text|message)\\s+(?:a\\s+)?(?:message\\s+)?to\\s+([+0-9][+0-9()\\s*-]{4,38})\\s+(?:saying|that says|with the message)\\s+([\\s\\S]+)$/i);
+ if(sms){const ok=device.sendMessage(sms[1],sms[2].replace(/[.!?]+$/,''));addBubble('assistant',ok?'Opening your SMS app with a draft to '+sms[1]+'. Review it and press Send yourself.':'Could not open the SMS composer.');return true}
+ if(/^(?:please\\s+)?(?:play|open)\\s+(?:my\\s+)?music[.!?]*$/i.test(text)){const ok=device.openMusic();addBubble('assistant',ok?'Opening a music app. Playback controls depend on the music app available on your phone.':'Could not open a music app.');return true}
+ if(/^(?:please\\s+)?(?:open|show)\\s+(?:my\\s+)?(?:phonebook|phone book|contacts)[.!?]*$/i.test(text)){const ok=device.openContacts();addBubble('assistant',ok?'Opening your contacts app. Contact details remain on your phone.':'Could not open contacts.');return true}
+ if(/^(?:please\\s+)?(?:read|show|open)\\s+(?:my\\s+)?(?:text )?messages(?: inbox)?[.!?]*$/i.test(text)){const ok=device.openMessages();addBubble('assistant',ok?'Opening your messaging app so you can read your inbox. Message access is not copied to Norah.':'Could not open your messaging app.');return true}
+ if(/^(?:please\\s+)?(?:take|capture)\\s+(?:a\\s+)?(?:photo|picture)[.!?]*$/i.test(text)){const ok=device.takePicture();addBubble('assistant',ok?'Opening the camera app. Take and save the picture in the camera app.':'Could not open the camera app.');return true}
+ if(/^(?:please\\s+)?(?:record|take)\\s+(?:a\\s+)?video[.!?]*$/i.test(text)){const ok=device.recordVideo();addBubble('assistant',ok?'Opening the camera app in video mode if supported. Start and stop recording in the camera app.':'Could not open video recording.');return true}
+ if(/^(?:please\\s+)?(?:open|turn on|launch)\\s+(?:my\\s+)?camera[.!?]*$/i.test(text)){const ok=device.takePicture();addBubble('assistant',ok?'Opening the camera app. Android camera privacy controls remain active.':'Could not open the camera app.');return true}
+ if(/^(?:please\\s+)?open\\s+(?:adaptive ai|norah)\\s+app settings[.!?]*$/i.test(text)){const ok=device.openAppSettings();addBubble('assistant',ok?'Opening Adaptive AI app settings.':'Could not open app settings.');return true}
+ return false
+}
 async function sendMessage(raw){
  const message=raw.trim();if(!message||busy)return;
  errorText.textContent='';
  if(!authenticated){errorText.textContent='Sign in before sending a message.';return}
- addBubble('user',message);input.value='';setBusy(true);connectionLabel.textContent='Sending securely to Norah…';
+ addBubble('user',message);input.value='';
+ if(runNativePhoneCommand(message)){connectionLabel.textContent='Phone action requested';return}
+ setBusy(true);connectionLabel.textContent='Sending securely to Norah…';
  try{
   const response=await fetch('/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({message,...(conversationId?{conversation_id:conversationId}:{})})});
   const data=await response.json().catch(()=>({detail:'The server returned an unreadable response.'}));

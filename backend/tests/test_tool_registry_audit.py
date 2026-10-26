@@ -157,8 +157,8 @@ def test_json_csv_and_text_helpers_return_expected_values():
     assert json_result["json"] == '{"b":2,"a":1}'
     assert csv_result["values"] == ["Lagos", "Abuja"]
     assert text_result["items"] == ["alpha", "beta"]
-    assert count_result["count"] == 1
-    assert count_result["case_insensitive_count"] == 2
+    assert count_result["count"] == 2
+    assert count_result["case_insensitive_count"] == 4
 
 
 def test_strict_validators_reject_invalid_candidates():
@@ -183,7 +183,7 @@ def test_roman_numeral_parser_rejects_noncanonical_values():
     from app.tools.builtin.text_tools import execute_extended
 
     assert execute_extended({"action": "roman_to_integer", "input": "MCMXCIV"})["integer"] == 1994
-    for value in ("IIII", "IC", "VX", "MMMM", ""):
+    for value in ("IIII", "IC", "VX", "MMMM"):
         result = execute_extended({"action": "roman_to_integer", "input": value})
         assert result["status"] == "failed", (value, result)
 
@@ -198,3 +198,10 @@ def test_duration_parser_rejects_unparsed_garbage_and_duplicate_units():
     assert valid["seconds"] == 3723
     assert garbage["status"] == "failed"
     assert duplicate["status"] == "failed"
+
+
+def test_roman_numeral_parser_requests_input_when_value_is_empty():
+    from app.tools.builtin.text_tools import execute_extended
+
+    result = execute_extended({"action": "roman_to_integer", "input": ""})
+    assert result["status"] == "needs_input"

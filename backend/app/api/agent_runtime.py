@@ -368,7 +368,7 @@ def create_task(body: TaskCreate, request: Request):
     _ensure_table()
     task_id, now = str(uuid4()), _now()
     plan = _plan(body.goal.strip(), body.context)
-    has_multiple_subgoals = len([part for part in re.split(r"\\s+(?:and then|then|and)\\s+", body.goal.strip(), flags=re.I) if part.strip()]) > 1
+    has_multiple_subgoals = len([part for part in re.split(r"\s+(?:and then|then|and)\s+", body.goal.strip(), flags=re.I) if part.strip()]) > 1
     if plan and plan[0].get("action") == "unsupported_goal" and not has_multiple_subgoals:
         plan = _ai_plan(body.goal.strip(), body.context) or plan
     with _ready_engine().begin() as conn:

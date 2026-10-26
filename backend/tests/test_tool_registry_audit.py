@@ -66,6 +66,7 @@ def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors
         "equals": "sample",
         "path": "name",
         "seconds": 90,
+        "milliseconds": 1500,
         "old": 10,
         "new": 12,
         "value": 2,
@@ -74,7 +75,7 @@ def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors
     for name in sorted(EXTENDED_ACTIONS):
         try:
             action_input = common_arguments["input"]
-            if name.startswith("csv_") or name in {"csv_to_tsv", "markdown_table_to_csv"}:
+            if name.startswith("csv_") or name == "csv_to_tsv":
                 action_input = "name,age\\nAlice,30\\nBob,40\\n,\\n"
             elif name == "tsv_to_csv":
                 action_input = "name\\tage\\nAlice\\t30\\nBob\\t40\\n"

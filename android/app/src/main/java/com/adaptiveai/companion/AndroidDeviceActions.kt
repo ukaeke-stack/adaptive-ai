@@ -260,4 +260,29 @@ class AndroidDeviceActions(private val context: Context) {
         launch(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS),
             "Could not open accessibility settings.")
 
+    @JavascriptInterface
+    fun openPhotos(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, MediaStore.Images.Media.EXTERNAL_CONTENT_URI),
+            "No photo gallery is available.")
+
+    @JavascriptInterface
+    fun openVideoLibrary(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, MediaStore.Video.Media.EXTERNAL_CONTENT_URI),
+            "No video library is available.")
+
+    @JavascriptInterface
+    fun openVoiceRecorder(): Boolean =
+        launch(Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION),
+            "No voice recorder application is available.")
+
+    @JavascriptInterface
+    fun openStorageSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS),
+            "Could not open storage settings.")
+
+    @JavascriptInterface
+    fun openPlayStore(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store")),
+            "No browser is available to open the Play Store website.")
+
 }

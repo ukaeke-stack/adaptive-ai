@@ -1267,4 +1267,67 @@ def execute_extra(action, step, value):
             try:lat,lon=float(p[0]),float(p[1]);ok=-90<=lat<=90 and -180<=lon<=180
             except (ValueError,IndexError):lat=lon=None;ok=False
             return {"status":"succeeded","valid":ok,"latitude":lat,"longitude":lon}
+
+    if action in {"csv_column_sort","csv_select_rows","csv_find_value","csv_split_columns","json_array_filter_by_type","json_array_unique_by_key","extract_urls_from_markdown","extract_xml_cdata","extract_http_methods","extract_http_status_lines","parse_duration_iso8601","format_duration_iso8601"}:
+        if action in {"csv_column_sort","csv_select_rows","csv_find_value","csv_split_columns"}:
+            try:rows=list(csv.DictReader(io.StringIO(value)))[:5000]
+            except csv.Error as exc:return {"status":"failed","message":str(exc)}
+            headers=list(rows[0].keys()) if rows else next(csv.reader(io.StringIO(value)),[])
+            if action=="csv_column_sort":
+                col=step.get("column")
+                if col not in headers:return {"status":"failed","message":"Column does not exist."}
+                rows.sort(key=lambda r:str(r.get(col,"")).casefold(),reverse=bool(step.get("descending",False)))
+            elif action=="csv_select_rows":
+                col=step.get("column");expected=str(step.get("equals",""))
+                if col not in headers:return {"status":"failed","message":"Column does not exist."}
+                rows=[r for r in rows if str(r.get(col,""))==expected]
+            elif action=="csv_find_value":
+                needle=str(step.get("value","")).casefold();col=step.get("column")
+                rows=[r for r in rows if any(needle in str(r.get(col,"") if col else v).casefold() for v in (r.values() if not col else [r.get(col,"")]))]
+                return {"status":"succeeded","matches":rows[:MAX_ITEMS],"count":len(rows)}
+            else:
+                col=step.get("column")
+                if col not in headers:return {"status":"failed","message":"Column does not exist."}
+                delimiter=str(step.get("separator",";"))[:5]
+                for r in rows:r[col+"_parts"]=[x.strip() for x in str(r.get(col,"")).split(delimiter)]
+                headers.append(col+"_parts")
+                return {"status":"succeeded","rows":rows[:MAX_ITEMS],"columns":headers}
+            out=io.StringIO();w=csv.DictWriter(out,fieldnames=headers);w.writeheader();w.writerows(rows)
+            return {"status":"succeeded","csv":out.getvalue()[:MAX_TEXT],"row_count":len(rows)}
+        if action in {"json_array_filter_by_type","json_array_unique_by_key"}:
+            try:obj=json.loads(value)
+            except json.JSONDecodeError:return {"status":"failed","message":"Invalid JSON."}
+            if not isinstance(obj,list):return {"status":"failed","message":"JSON root must be an array."}
+            if action=="json_array_filter_by_type":
+                wanted=str(step.get("type","string"));obj=[x for x in obj if ("null" if x is None else "boolean" if isinstance(x,bool) else "integer" if isinstance(x,int) else "number" if isinstance(x,float) else "object" if isinstance(x,dict) else "array" if isinstance(x,list) else "string")==wanted]
+            else:
+                key=step.get("key");seen=set();items=[]
+                for x in obj:
+                    token=json.dumps(x.get(key) if isinstance(x,dict) else None,sort_keys=True,ensure_ascii=False)
+                    if token not in seen:seen.add(token);items.append(x)
+                obj=items
+            return {"status":"succeeded","items":obj[:MAX_ITEMS],"count":len(obj)}
+        if action=="extract_urls_from_markdown":
+            vals=re.findall(r"\[[^\]]+\]\((https?://[^)\s]+)\)|<?(https?://[^>\s]+)>?",value)
+            urls=[next((x for x in pair if x),"") for pair in vals]
+            return {"status":"succeeded","urls":list(dict.fromkeys(urls))[:MAX_ITEMS]}
+        if action=="extract_xml_cdata":
+            return {"status":"succeeded","sections":re.findall(r"(?s)<!\[CDATA\[(.*?)\]\]>",value)[:MAX_ITEMS]}
+        if action=="extract_http_methods":
+            vals=re.findall(r"(?i)\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|TRACE|CONNECT)\b",value)
+            return {"status":"succeeded","methods":[x.upper() for x in vals[:MAX_ITEMS]],"counts":dict(Counter(x.upper() for x in vals))}
+        if action=="extract_http_status_lines":
+            vals=re.findall(r"(?m)^\s*HTTP/\d(?:\.\d)?\s+([1-5]\d\d)(?:\s+([^\r\n]+))?",value)
+            return {"status":"succeeded","responses":[{"status":int(code),"reason":reason.strip() if reason else ""} for code,reason in vals[:MAX_ITEMS]]}
+        if action=="parse_duration_iso8601":
+            m=re.fullmatch(r"P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?",value.strip(),re.I)
+            if not m:return {"status":"failed","message":"Provide an ISO-8601 duration such as P2DT3H4M5S."}
+            d,h,mi,s=(float(x or 0) for x in m.groups());total=d*86400+h*3600+mi*60+s
+            return {"status":"succeeded","seconds":total,"days":d,"hours":h,"minutes":mi,"remaining_seconds":s}
+        if action=="format_duration_iso8601":
+            try:n=max(0,float(step.get("seconds",value)))
+            except (ValueError,TypeError):return {"status":"failed","message":"Provide non-negative seconds."}
+            d=int(n//86400);n-=d*86400;h=int(n//3600);n-=h*3600;mi=int(n//60);s=n-mi*60
+            result="P"+(str(d)+"D" if d else "")+"T"+(str(h)+"H" if h else "")+(str(mi)+"M" if mi else "")+((str(round(s,3))+"S") if s or not (d or h or mi) else "")
+            return {"status":"succeeded","duration":result}
     return None

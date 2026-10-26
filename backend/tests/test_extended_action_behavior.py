@@ -114,3 +114,26 @@ def test_hash_text_sha256_is_deterministic():
     assert result["algorithm"] == "sha256"
     assert result["digest"] == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 
+def test_extract_json_objects_handles_nested_braces_and_braces_in_strings():
+    result = execute_extended({
+        "action": "extract_json_objects",
+        "input": 'prefix {"outer":{"message":"literal } brace","items":[1,2]}} middle {"ok":true} suffix',
+    })
+    assert result["status"] == "succeeded"
+    assert result["count"] == 2
+    import json
+    assert json.loads(result["objects"][0]) == {
+        "outer": {"message": "literal } brace", "items": [1, 2]}
+    }
+    assert json.loads(result["objects"][1]) == {"ok": True}
+
+
+def test_extract_json_objects_ignores_unbalanced_and_non_object_braces():
+    result = execute_extended({
+        "action": "extract_json_objects",
+        "input": 'bad {not-json} then {"valid": 1} and [1, 2]',
+    })
+    assert result["status"] == "succeeded"
+    assert result["count"] == 1
+    assert result["objects"] == ['{"valid": 1}']
+

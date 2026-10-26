@@ -25,6 +25,7 @@ def test_line_transformations_preserve_order_or_sort():
     assert run("deduplicate_lines", "b\na\nb")["lines"] == ["b", "a"]
     assert run("sort_lines", "z\nA")["lines"] == ["A", "z"]
     assert run("reverse_lines", "a\nb")["lines"] == ["b", "a"]
+    assert run("normalize_whitespace", "  too   much\\n whitespace  ")["text"] == "too much whitespace"
 
 
 def test_case_conversion_slug_and_frequency():

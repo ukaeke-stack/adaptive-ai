@@ -155,7 +155,7 @@ def _plan_single(goal: str, context: dict[str, str]) -> list[dict]:
 
 def _plan(goal: str, context: dict[str, str]) -> list[dict]:
     """Build a transparent multi-step plan when every subgoal maps to a safe tool."""
-    segments = [part.strip() for part in re.split(r"\\s+(?:and then|then|and)\\s+", goal, flags=re.I) if part.strip()]
+    segments = [part.strip() for part in re.split(r"\s+(?:and then|then|and)\s+", goal, flags=re.I) if part.strip()]
     if 1 < len(segments) <= 5:
         combined = []
         for segment in segments:

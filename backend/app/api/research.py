@@ -38,24 +38,25 @@ def research_status(request: Request):
     }
 
 
-@router.post("/search")
-async def web_search(body: SearchRequest, request: Request):
-    require_user(request)
+def search_for_agent(query: str, max_results: int = 5) -> dict:
+    """Read-only search helper shared by the authenticated API and task executor."""
     key = _configured_key()
-    query = body.query.strip()
-    if len(query) < 2:
-        raise HTTPException(status_code=422, detail="Enter a search query with at least two characters.")
+    query = query.strip() if isinstance(query, str) else ""
+    if len(query) < 2 or len(query) > 1000:
+        raise HTTPException(status_code=422, detail="Search query must contain 2 to 1000 characters.")
+    if not 1 <= max_results <= 10:
+        raise HTTPException(status_code=422, detail="max_results must be between 1 and 10.")
     payload = {
         "api_key": key,
         "query": query,
-        "max_results": body.max_results,
+        "max_results": max_results,
         "search_depth": "basic",
         "include_answer": False,
         "include_raw_content": False,
     }
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=False) as client:
-            response = await client.post(TAVILY_ENDPOINT, json=payload)
+        with httpx.Client(timeout=httpx.Timeout(15.0, connect=5.0), follow_redirects=False) as client:
+            response = client.post(TAVILY_ENDPOINT, json=payload)
     except httpx.TimeoutException as exc:
         raise HTTPException(status_code=504, detail="The search provider timed out. Try again.") from exc
     except httpx.HTTPError as exc:
@@ -72,7 +73,7 @@ async def web_search(body: SearchRequest, request: Request):
         raise HTTPException(status_code=502, detail="The search provider returned an invalid response.") from exc
     raw_results = data.get("results", []) if isinstance(data, dict) else []
     results = []
-    for item in raw_results[:body.max_results]:
+    for item in raw_results[:max_results]:
         if not isinstance(item, dict):
             continue
         url = str(item.get("url", ""))[:2000]
@@ -93,3 +94,9 @@ async def web_search(body: SearchRequest, request: Request):
         "read_only": True,
         "note": "Search results may be incomplete or outdated. Open sources to verify important claims.",
     }
+
+
+@router.post("/search")
+def web_search(body: SearchRequest, request: Request):
+    require_user(request)
+    return search_for_agent(body.query, body.max_results)

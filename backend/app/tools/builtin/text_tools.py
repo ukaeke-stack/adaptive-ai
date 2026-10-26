@@ -14,6 +14,15 @@ import unicodedata
 from collections import Counter
 from urllib.parse import urlparse
 
+EXTENDED_ACTIONS = {
+    "count_characters", "estimate_reading_time", "word_frequency",
+    "deduplicate_lines", "sort_lines", "convert_case", "slugify",
+    "extract_urls", "extract_headings", "validate_json", "format_json",
+    "summarize_csv", "csv_to_markdown", "replace_text", "hash_text",
+    "extract_numbers", "extract_hashtags", "extract_mentions",
+    "reverse_lines", "trim_lines",
+}
+
 MAX_TEXT = 120_000
 MAX_ROWS = 5_000
 MAX_ITEMS = 500
@@ -37,15 +46,7 @@ def _text(step: dict) -> str:
 def execute_extended(step: dict) -> dict | None:
     """Execute an allowlisted extended action; return None for unknown actions."""
     action = step.get("action")
-    supported = {
-        "count_characters", "estimate_reading_time", "word_frequency",
-        "deduplicate_lines", "sort_lines", "convert_case", "slugify",
-        "extract_urls", "extract_headings", "validate_json", "format_json",
-        "summarize_csv", "csv_to_markdown", "replace_text", "hash_text",
-        "extract_numbers", "extract_hashtags", "extract_mentions",
-        "reverse_lines", "trim_lines",
-    }
-    if action not in supported:
+    if action not in EXTENDED_ACTIONS:
         return None
 
     value = _text(step)

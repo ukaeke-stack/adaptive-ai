@@ -24,6 +24,7 @@ from sqlalchemy import text
 
 from app.memory.store import _ready_engine
 from app.security.sessions import require_user
+from app.tools.builtin.text_tools import execute_extended
 
 router = APIRouter(prefix="/v1/agent", tags=["autonomous agent"])
 
@@ -82,6 +83,46 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
             plan.append({"id": "step-1", "action": "create_reminder", "title": title,
                          "due_at": due_at or None, "notes": context.get("notes", ""),
                          "status": "pending", "device_notification_scheduled": False})
+    # Deterministic local data tools. The executor uses a fixed allowlist and never evals input.
+    extended_patterns = [
+        (("count characters", "character count", "how many characters"), "count_characters"),
+        (("reading time", "how long to read", "estimate reading"), "estimate_reading_time"),
+        (("word frequency", "most common words", "frequent words"), "word_frequency"),
+        (("remove duplicate lines", "deduplicate lines", "unique lines"), "deduplicate_lines"),
+        (("sort lines", "sort this list", "alphabetize lines"), "sort_lines"),
+        (("uppercase", "upper case", "convert to uppercase"), "convert_case"),
+        (("lowercase", "lower case", "convert to lowercase"), "convert_case"),
+        (("title case", "convert to title case"), "convert_case"),
+        (("slugify", "make a slug", "url slug"), "slugify"),
+        (("extract urls", "extract links", "find urls"), "extract_urls"),
+        (("extract headings", "list headings", "find markdown headings"), "extract_headings"),
+        (("validate json", "check json validity", "is this valid json"), "validate_json"),
+        (("format json", "pretty print json", "prettify json"), "format_json"),
+        (("summarize csv", "csv summary", "analyze csv"), "summarize_csv"),
+        (("convert csv to markdown", "csv to markdown", "make markdown table"), "csv_to_markdown"),
+        (("replace text", "replace words", "find and replace"), "replace_text"),
+        (("hash this text", "text checksum", "sha256"), "hash_text"),
+        (("extract numbers", "find numbers in this text", "list numbers"), "extract_numbers"),
+        (("extract hashtags", "find hashtags"), "extract_hashtags"),
+        (("extract mentions", "find @mentions", "extract mentions"), "extract_mentions"),
+        (("reverse lines", "reverse the line order"), "reverse_lines"),
+        (("trim lines", "remove whitespace from lines"), "trim_lines"),
+        (("normalize whitespace", "collapse whitespace", "clean extra spaces"), "normalize_whitespace"),
+    ]
+    if not plan:
+        for phrases, action in extended_patterns:
+            if any(phrase in lower for phrase in phrases):
+                step = {"id": "step-1", "action": action, "input": text_value,
+                        "requires_context": not bool(text_value), "status": "pending"}
+                if action == "convert_case":
+                    step["mode"] = "upper" if "upper" in lower else ("title" if "title" in lower else "lower")
+                if action == "replace_text":
+                    step["find"] = context.get("find", "")
+                    step["replacement"] = context.get("replacement", "")
+                if action == "hash_text":
+                    step["algorithm"] = context.get("algorithm", "sha256")
+                plan.append(step)
+                break
     if not plan:
         plan.append({"id": "step-1", "action": "unsupported_goal", "status": "blocked",
                      "reason": "This goal needs an integration or tool that is not enabled in the current safe runtime."})
@@ -207,6 +248,12 @@ def _calculate(expression: str) -> float | int:
 
 def _execute_step(step: dict) -> dict:
     action = step.get("action")
+    try:
+        extended_result = execute_extended(step)
+    except (ValueError, TypeError, KeyError) as exc:
+        return {"status": "failed", "message": str(exc)}
+    if extended_result is not None:
+        return extended_result
     if action in TEXT_ACTIONS:
         value = step.get("input", "")
         if not isinstance(value, str) or not value.strip():
@@ -274,7 +321,9 @@ def create_task(body: TaskCreate, request: Request):
     user = require_user(request)
     _ensure_table()
     task_id, now = str(uuid4()), _now()
-    plan = _ai_plan(body.goal.strip(), body.context) or _plan(body.goal.strip(), body.context)
+    plan = _plan(body.goal.strip(), body.context)
+    if plan and plan[0].get("action") == "unsupported_goal":
+        plan = _ai_plan(body.goal.strip(), body.context) or plan
     with _ready_engine().begin() as conn:
         conn.execute(text("""INSERT INTO adaptive_agent_tasks
             (id,user_id,goal,context_json,plan_json,results_json,status,created_at,updated_at)

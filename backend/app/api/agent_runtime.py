@@ -53,7 +53,7 @@ class TaskCreate(BaseModel):
     context: dict[str, str] = Field(default_factory=dict, max_length=10)
 
 
-def _plan(goal: str, context: dict[str, str]) -> list[dict]:
+def _plan_single(goal: str, context: dict[str, str]) -> list[dict]:
     """Create a transparent, bounded plan from intent; unsupported goals stay unexecutable."""
     lower = goal.lower()
     plan: list[dict] = []
@@ -151,6 +151,24 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
                      "reason": "This goal needs an integration or tool that is not enabled in the current safe runtime."})
     return plan
 
+
+
+def _plan(goal: str, context: dict[str, str]) -> list[dict]:
+    """Build a transparent multi-step plan when every subgoal maps to a safe tool."""
+    segments = [part.strip() for part in re.split(r"\\s+(?:and then|then|and)\\s+", goal, flags=re.I) if part.strip()]
+    if 1 < len(segments) <= 5:
+        combined = []
+        for segment in segments:
+            candidate = _plan_single(segment, context)
+            if not candidate or any(step.get("action") == "unsupported_goal" for step in candidate):
+                combined = []
+                break
+            combined.extend(candidate)
+        if combined and len(combined) <= 5:
+            for index, step in enumerate(combined, start=1):
+                step["id"] = f"step-{index}"
+            return combined
+    return _plan_single(goal, context)
 
 def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
     """Ask the configured model to plan only among the registered safe actions.

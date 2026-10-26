@@ -893,7 +893,7 @@ def execute_extra(action, step, value):
         if action=="replace_regex":
             pat=step.get("pattern","")
             if not isinstance(pat,str) or not pat or len(pat)>300:return {"status":"failed","message":"Provide regex pattern up to 300 characters."}
-            try:res=re.sub(pat,str(step.get("replacement","")),value,count=max(0,min(10000,int(step.get("count",0))))
+            try:res=re.sub(pat,str(step.get("replacement","")),value,count=max(0,min(10000,int(step.get("count",0)))))
             except re.error as exc:return {"status":"failed","message":"Invalid regex: "+str(exc)}
             return {"status":"succeeded","text":res[:MAX_TEXT]}
         if action=="split_by_regex":
@@ -1071,4 +1071,45 @@ def execute_extra(action, step, value):
             import calendar
             idx=dt.year*12+dt.month-1+int(step.get("months",0));year,month0=divmod(idx,12);month=month0+1;day=min(dt.day,calendar.monthrange(year,month)[1])
             return {"status":"succeeded","date":dt.replace(year=year,month=month,day=day).isoformat()}
+
+    if action=="markdown_table_to_json":
+        rows=[]
+        for line in lines:
+            if line.strip().startswith("|") and not re.match(r"^\s*\|?[-:| ]+\|?\s*$",line):rows.append([x.strip() for x in line.strip().strip("|").split("|")])
+        if len(rows)<2:return {"status":"failed","message":"Markdown table with header and data rows required."}
+        headers=rows[0];items=[dict(zip(headers,row)) for row in rows[1:] if len(row)==len(headers)]
+        return {"status":"succeeded","json":json.dumps(items[:MAX_ITEMS],ensure_ascii=False,indent=2)[:MAX_TEXT],"row_count":len(items)}
+    if action=="extract_json_objects":
+        vals=[]
+        try:
+            decoder=json.JSONDecoder();i=0
+            while i<len(value) and len(vals)<MAX_ITEMS:
+                if value[i]=="{":
+                    try:obj,end=decoder.raw_decode(value[i:]);vals.append(json.dumps(obj,ensure_ascii=False));i+=end;continue
+                    except json.JSONDecodeError:pass
+                i+=1
+        except Exception:pass
+        return {"status":"succeeded","objects":vals,"count":len(vals)}
+    if action=="extract_xml_text":
+        import xml.etree.ElementTree as ET
+        try:root=ET.fromstring(value)
+        except ET.ParseError as exc:return {"status":"failed","message":"Invalid XML: "+str(exc)}
+        return {"status":"succeeded","text":" ".join(x.strip() for x in root.itertext() if x.strip())[:MAX_TEXT]}
+    if action=="extract_html_text":
+        return {"status":"succeeded","text":html.unescape(re.sub(r"(?is)<(script|style)\b.*?</\1\s*>"," ",re.sub(r"<[^>]*>"," ",value)))[:MAX_TEXT]}
+    if action=="extract_css_variables":
+        vals=re.findall(r"(--[A-Za-z_][\w-]*)\s*:\s*([^;}{]+)",value)
+        return {"status":"succeeded","variables":[{"name":k,"value":v.strip()} for k,v in vals[:MAX_ITEMS]],"count":len(vals)}
+    if action=="extract_xml_attributes":
+        vals=re.findall(r"""([A-Za-z_:][\w:.-]*)\s*=\s*["']([^"']*)["']""",value)
+        return {"status":"succeeded","attributes":[{"name":k,"value":v} for k,v in vals[:MAX_ITEMS]]}
+    if action=="extract_html_meta":
+        vals=re.findall(r"""(?is)<meta\b[^>]*(?:name|property)=["']([^"']+)["'][^>]*content=["']([^"']*)["'][^>]*>""",value)
+        return {"status":"succeeded","metadata":[{"name":k,"content":v} for k,v in vals[:MAX_ITEMS]]}
+    if action=="extract_html_title":
+        match=re.search(r"(?is)<title\b[^>]*>(.*?)</title\s*>",value)
+        return {"status":"succeeded","title":re.sub(r"<[^>]*>","",match.group(1)).strip() if match else ""}
+    if action=="extract_html_links_text":
+        vals=re.findall(r"""(?is)<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>""",value)
+        return {"status":"succeeded","links":[{"url":u,"text":re.sub(r"<[^>]*>","",t).strip()} for u,t in vals[:MAX_ITEMS]]}
     return None

@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.health import router as health_router
 from app.api.capabilities import router as capabilities_router
 from app.api.chat import router as chat_router
+from app.api.agent_runtime import router as agent_router
 from app.api.vision import router as vision_router
 from app.api.conversations import router as conversations_router
 from app.api.plugins import router as plugins_router
@@ -28,6 +29,7 @@ app.middleware("http")(protect_api_routes)
 app.include_router(health_router)
 app.include_router(capabilities_router)
 app.include_router(chat_router)
+app.include_router(agent_router)
 app.include_router(vision_router)
 app.include_router(conversations_router)
 app.include_router(plugins_router)

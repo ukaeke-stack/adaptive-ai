@@ -174,7 +174,7 @@ class AndroidDeviceActions(private val context: Context) {
 
     @JavascriptInterface
     fun openClock(): Boolean =
-        launch(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CLOCK),
+        launch(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS),
             "No clock application is available.")
 
     @JavascriptInterface

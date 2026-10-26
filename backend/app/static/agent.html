@@ -84,6 +84,15 @@
   <div class="actions"><button id="saveTodo" type="button">Add to-do</button><button id="refreshTodos" type="button" class="ghost">Refresh to-dos</button></div>
   <div class="status" id="workspaceStatus" role="status" aria-live="polite">Sign in to use notes and to-dos.</div>
   <div id="todoList" class="task-list"></div>
+  <div class="divider" style="height:1px;background:#29425d;margin:16px 0"></div>
+  <h3>Reminders</h3>
+  <div class="row">
+    <div class="field"><label for="reminderName">Reminder title</label><input id="reminderName" maxlength="160" placeholder="Pay electricity bill"></div>
+    <div class="field"><label for="reminderDue">Due date/time (optional)</label><input id="reminderDue" type="datetime-local"></div>
+  </div>
+  <div class="field"><label for="reminderNotes">Notes</label><input id="reminderNotes" maxlength="2000" placeholder="Optional reminder details"></div>
+  <div class="actions"><button id="saveReminder" type="button">Save reminder</button><button id="refreshReminders" type="button" class="ghost">Refresh reminders</button></div>
+  <div id="reminderList" class="task-list"></div>
 </section>
 
 <section class="panel" style="margin-top:16px">
@@ -180,6 +189,31 @@ $("ocrImage").addEventListener("click",processImageOcr);
 
 document.querySelectorAll("[data-native]").forEach(button=>button.addEventListener("click",()=>{const action=button.dataset.native;const status=$("deviceStatus");const bridge=window.AdaptiveDevice;if(!bridge||typeof bridge[action]!=="function"){status.textContent="This action is only available inside the Norah Android app. No device action was performed.";status.classList.add("error");return}try{let result;if(action==="openMaps"||action==="searchWeb")result=bridge[action]($("deviceQuery").value.trim());else if(action==="shareText")result=bridge[action]($("deviceShareText").value.trim());else result=bridge[action]();status.textContent=result===false?"Android could not open the requested app or settings. Check whether a compatible app is installed.":"Android accepted the request. Complete any remaining steps in the opened system app.";status.classList.toggle("error",result===false)}catch(e){status.textContent="Android action failed: "+e.message;status.classList.add("error")}}));
 async function runResearch(){const query=$("researchQuery").value.trim();const status=$("researchStatus");const results=$("researchResults");results.replaceChildren();if(!authenticated){status.textContent="Sign in on the main Norah page before searching.";status.classList.add("error");return}if(query.length<2){status.textContent="Enter a research question with at least two characters.";status.classList.add("error");return}const button=$("researchSearch");button.disabled=true;status.textContent="Checking research provider and searching…";status.classList.remove("error");try{const config=await api("/v1/research/status");if(!config.configured)throw new Error("Web research is not configured. The service administrator must set TAVILY_API_KEY.");const data=await api("/v1/research/search",{method:"POST",body:JSON.stringify({query,max_results:Number($("researchLimit").value)})});status.textContent="Found "+data.result_count+" result(s) for: "+data.query;for(const item of data.results||[]){const card=document.createElement("article");card.className="task";const link=document.createElement("a");link.href=item.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent=item.title||item.url;const snippet=document.createElement("p");snippet.className="muted";snippet.textContent=item.snippet||"No snippet available.";const url=document.createElement("div");url.className="muted";url.textContent=item.url;card.append(link,snippet,url);results.append(card)}if(!data.result_count)status.textContent+=" No safe HTTP/HTTPS results were returned."}catch(e){status.textContent=e.message;status.classList.add("error")}finally{button.disabled=false}}
+async function loadReminders(){
+  const list=$("reminderList"),status=$("workspaceStatus");
+  try{
+    const data=await api("/v1/assistant/reminders");list.replaceChildren();
+    for(const reminder of (data.reminders||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=reminder.title;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent=reminder.status+" · due "+(reminder.due_at||"not set");
+      const body=document.createElement("p");body.textContent=reminder.notes||"";
+      const actions=document.createElement("div");actions.className="task-actions";
+      for(const state of ["completed","cancelled"]){const button=document.createElement("button");button.className="ghost";button.textContent=state==="completed"?"Complete":"Cancel";button.addEventListener("click",async()=>{try{await api("/v1/assistant/reminders/"+encodeURIComponent(reminder.id)+"?status="+state,{method:"PATCH",body:"{}"});await loadReminders()}catch(e){status.textContent=e.message}});actions.append(button)}
+      const remove=document.createElement("button");remove.className="ghost";remove.textContent="Delete";remove.addEventListener("click",async()=>{if(!confirm("Delete this reminder?"))return;try{await api("/v1/assistant/reminders/"+encodeURIComponent(reminder.id),{method:"DELETE",body:"{}"});await loadReminders()}catch(e){status.textContent=e.message}});
+      actions.append(remove);card.append(title,meta,body,actions);list.append(card);
+    }
+  }catch(e){status.textContent=e.message}
+}
+$("saveReminder").addEventListener("click",async()=>{
+  const status=$("workspaceStatus");
+  try{const title=$("reminderName").value.trim();if(!title)throw new Error("Enter a reminder title.");
+    const local=$("reminderDue").value;const due=local?new Date(local).toISOString():null;
+    await api("/v1/assistant/reminders",{method:"POST",body:JSON.stringify({title,due_at:due,notes:$("reminderNotes").value})});
+    $("reminderName").value="";$("reminderDue").value="";$("reminderNotes").value="";status.textContent="Reminder saved. For Android notifications, use the task-run reminder flow or configure the device notification permission.";await loadReminders();
+  }catch(e){status.textContent=e.message}
+});
+$("refreshReminders").addEventListener("click",loadReminders);
 async function loadNotes(){
   const list=$("noteList"), status=$("workspaceStatus");
   try{
@@ -328,7 +362,7 @@ $("saveAutomation").addEventListener("click",async()=>{
 $("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders()})();
 </script>
 </body>
 </html>

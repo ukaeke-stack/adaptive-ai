@@ -61,6 +61,22 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Speech and language controls</h3>
+  <p class="muted">These controls use Android's native speech services when this page is open inside Norah. Availability depends on the language packs installed on the phone.</p>
+  <div class="row">
+    <div class="field"><label for="recognitionLanguage">Speech recognition language tag</label><input id="recognitionLanguage" value="en-NG" maxlength="20" placeholder="en-NG"></div>
+    <div class="field"><label for="speechLanguage">Text-to-speech language tag</label><input id="speechLanguage" value="en-NG" maxlength="20" placeholder="en-NG"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="speechRate">Speech rate (0.5–2.0)</label><input id="speechRate" type="number" min="0.5" max="2" step="0.1" value="1"></div>
+    <div class="field"><label for="speechPitch">Speech pitch (0.5–2.0)</label><input id="speechPitch" type="number" min="0.5" max="2" step="0.1" value="1"></div>
+  </div>
+  <div class="field"><label for="speechSample">Test speech text</label><input id="speechSample" maxlength="1000" value="Hello, I am Norah. How can I help you?"></div>
+  <div class="actions"><button id="applyVoiceSettings" type="button">Apply voice settings</button><button id="testSpeech" type="button" class="ghost">Speak test</button><button id="stopSpeech" type="button" class="ghost">Stop speech</button></div>
+  <div class="status" id="voiceStatus" role="status" aria-live="polite">Native speech controls require the Android app.</div>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Connected social accounts</h3>
   <p class="muted">Connect Instagram, Facebook, X, YouTube or TikTok using provider OAuth. Tokens remain encrypted on the server. Posting and publishing are not enabled by this panel.</p>
   <div class="actions"><button id="refreshSocial" type="button" class="ghost">Refresh connections</button></div>
@@ -138,6 +154,23 @@ $("ocrImage").addEventListener("click",processImageOcr);
 
 document.querySelectorAll("[data-native]").forEach(button=>button.addEventListener("click",()=>{const action=button.dataset.native;const status=$("deviceStatus");const bridge=window.AdaptiveDevice;if(!bridge||typeof bridge[action]!=="function"){status.textContent="This action is only available inside the Norah Android app. No device action was performed.";status.classList.add("error");return}try{let result;if(action==="openMaps"||action==="searchWeb")result=bridge[action]($("deviceQuery").value.trim());else if(action==="shareText")result=bridge[action]($("deviceShareText").value.trim());else result=bridge[action]();status.textContent=result===false?"Android could not open the requested app or settings. Check whether a compatible app is installed.":"Android accepted the request. Complete any remaining steps in the opened system app.";status.classList.toggle("error",result===false)}catch(e){status.textContent="Android action failed: "+e.message;status.classList.add("error")}}));
 async function runResearch(){const query=$("researchQuery").value.trim();const status=$("researchStatus");const results=$("researchResults");results.replaceChildren();if(!authenticated){status.textContent="Sign in on the main Norah page before searching.";status.classList.add("error");return}if(query.length<2){status.textContent="Enter a research question with at least two characters.";status.classList.add("error");return}const button=$("researchSearch");button.disabled=true;status.textContent="Checking research provider and searching…";status.classList.remove("error");try{const config=await api("/v1/research/status");if(!config.configured)throw new Error("Web research is not configured. The service administrator must set TAVILY_API_KEY.");const data=await api("/v1/research/search",{method:"POST",body:JSON.stringify({query,max_results:Number($("researchLimit").value)})});status.textContent="Found "+data.result_count+" result(s) for: "+data.query;for(const item of data.results||[]){const card=document.createElement("article");card.className="task";const link=document.createElement("a");link.href=item.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent=item.title||item.url;const snippet=document.createElement("p");snippet.className="muted";snippet.textContent=item.snippet||"No snippet available.";const url=document.createElement("div");url.className="muted";url.textContent=item.url;card.append(link,snippet,url);results.append(card)}if(!data.result_count)status.textContent+=" No safe HTTP/HTTPS results were returned."}catch(e){status.textContent=e.message;status.classList.add("error")}finally{button.disabled=false}}
+const nativeSpeech=()=>window.AdaptiveNative;
+$("applyVoiceSettings").addEventListener("click",()=>{
+  const bridge=nativeSpeech(), status=$("voiceStatus");
+  if(!bridge){status.textContent="Native speech settings are available only inside the Norah Android app.";return}
+  const recog=$("recognitionLanguage").value.trim(), speak=$("speechLanguage").value.trim();
+  const rate=Number($("speechRate").value), pitch=Number($("speechPitch").value);
+  const a=bridge.setRecognitionLanguage(recog), b=bridge.setSpeechLanguage(speak), d=bridge.setSpeechRate(rate), e=bridge.setSpeechPitch(pitch);
+  status.textContent="Recognition language: "+(a?"accepted":"not accepted")+"; speech language: "+(b?"accepted":"unavailable or unsupported")+"; rate: "+(d?"set":"invalid")+"; pitch: "+(e?"set":"invalid")+".";
+});
+$("testSpeech").addEventListener("click",()=>{
+  const bridge=nativeSpeech(), status=$("voiceStatus");
+  if(!bridge||typeof bridge.speak!=="function"){status.textContent="Native text-to-speech is unavailable in this browser.";return}
+  const ok=bridge.speak($("speechSample").value);status.textContent=ok?"Speech request accepted.":"Speech request could not be started.";
+});
+$("stopSpeech").addEventListener("click",()=>{
+  const bridge=nativeSpeech();if(bridge&&typeof bridge.stop==="function"){bridge.stop();$("voiceStatus").textContent="Speech stopped."}else $("voiceStatus").textContent="Native speech is unavailable in this browser.";
+});
 async function loadSocial(){
   const status=$("socialStatus"), list=$("socialList");
   try{

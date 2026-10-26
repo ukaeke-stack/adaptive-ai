@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 from fastapi import HTTPException
 
@@ -37,19 +35,19 @@ def test_search_sanitizes_provider_results(monkeypatch):
     class FakeClient:
         def __init__(self, *args, **kwargs):
             pass
-        async def __aenter__(self):
+        def __enter__(self):
             return self
-        async def __aexit__(self, *args):
+        def __exit__(self, *args):
             return False
-        async def post(self, url, json):
+        def post(self, url, json):
             assert url == research.TAVILY_ENDPOINT
             assert json["api_key"] == "test-key"
             assert json["include_raw_content"] is False
             return FakeResponse()
 
-    monkeypatch.setattr(research.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(research.httpx, "Client", FakeClient)
     body = research.SearchRequest(query="safe test", max_results=5)
-    result = asyncio.run(research.web_search(body, None))
+    result = research.web_search(body, None)
     assert result["result_count"] == 1
     assert result["results"][0]["url"] == "https://example.com/a"
     assert result["read_only"] is True
@@ -60,9 +58,24 @@ def test_search_rejects_unknown_request_fields():
         research.SearchRequest(query="valid query", unexpected="secret")
 
 
-
 def test_research_routes_are_registered():
     from app.main import app
     paths = app.openapi()["paths"]
     assert "/v1/research/status" in paths
     assert "/v1/research/search" in paths
+
+
+def test_agent_can_plan_read_only_web_search():
+    from app.api.agent_runtime import _plan
+    plan = _plan("Research the latest Android notification guidance", {})
+    assert plan[0]["action"] == "web_search"
+    assert plan[0]["external_side_effect"] is False
+
+
+def test_agent_search_action_reports_missing_provider_key(monkeypatch):
+    from app.api import agent_runtime
+    monkeypatch.setattr(agent_runtime, "search_for_agent",
+                        lambda query, max_results: (_ for _ in ()).throw(HTTPException(status_code=503, detail="not configured")))
+    result = agent_runtime._execute_step({"action": "web_search", "query": "test", "max_results": 5})
+    assert result["status"] == "failed"
+    assert result["message"] == "not configured"

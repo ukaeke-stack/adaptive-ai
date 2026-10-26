@@ -7,9 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from app.memory.store import _ready_engine
 from app.security.sessions import require_user
+from app.tools.registry import get_tool
+from app.tools.builtin.text_tools import EXTENDED_ACTIONS
 
 router = APIRouter(prefix="/v1/plugin-runtime", tags=["safe plugin runtime"])
 ALLOWED = {"count_words", "extract_bullets", "draft_message"}
+REGISTERED_ALLOWED = frozenset(EXTENDED_ACTIONS) | ALLOWED
 
 def _tables():
     with _ready_engine().begin() as conn:
@@ -21,12 +24,12 @@ def _tables():
 class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=3, max_length=48)
-    capabilities: list[str] = Field(min_length=1, max_length=3)
+    capabilities: list[str] = Field(min_length=1, max_length=20)
 
 @router.post("/proposals")
 def propose(body: Manifest, request: Request):
     user = require_user(request)
-    if len(set(body.capabilities)) != len(body.capabilities) or set(body.capabilities) - ALLOWED:
+    if len(set(body.capabilities)) != len(body.capabilities) or set(body.capabilities) - REGISTERED_ALLOWED:
         raise HTTPException(status_code=422, detail="Only unique allow-listed built-in capabilities are accepted.")
     _tables()
     pid, now = str(uuid4()), datetime.now(timezone.utc).isoformat()
@@ -79,7 +82,8 @@ def activate(plugin_id: str, request: Request):
 class RunInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     capability: str
-    input: str = Field(max_length=12000)
+    input: str = Field(default="", max_length=120000)
+    arguments: dict = Field(default_factory=dict, max_length=40)
 
 @router.post("/plugins/{plugin_id}/run")
 def run_plugin(plugin_id: str, body: RunInput, request: Request):
@@ -103,6 +107,15 @@ def run_plugin(plugin_id: str, body: RunInput, request: Request):
     elif body.capability == "draft_message":
         result = {"draft":value,"sent":False}
     else:
-        raise HTTPException(status_code=422, detail="Unsupported built-in capability.")
+        tool = get_tool(body.capability)
+        if tool is None:
+            raise HTTPException(status_code=422, detail="Capability is not registered in the server tool allowlist.")
+        arguments = dict(body.arguments)
+        if value and "input" not in arguments:
+            arguments["input"] = value
+        try:
+            result = tool(arguments)
+        except (ValueError, TypeError, KeyError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"plugin_id":plugin_id,"capability":body.capability,"result":result,
             "executed":True,"execution_mode":"fixed-built-in-allowlist","user_code_executed":False}

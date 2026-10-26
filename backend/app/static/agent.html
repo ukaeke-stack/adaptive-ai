@@ -27,9 +27,12 @@
   <h3>Create a task</h3><p class="muted">Describe one goal. Add supporting content or structured details if needed.</p>
   <div class="field"><label for="goal">Goal or instruction</label><textarea id="goal" maxlength="2000" placeholder="Example: Count the words in this document, draft a message, or create a reminder." required></textarea></div>
   <div class="field"><label for="taskText">Text to process (optional)</label><textarea id="taskText" maxlength="12000" placeholder="Paste document text for word count or bullet extraction."></textarea></div>
-  <div class="field"><label for="pdfFile">Load a PDF document (up to 10 MB)</label><input id="pdfFile" type="file" accept="application/pdf,.pdf"></div>
+  <div class="field"><label for="pdfFile">Load a PDF document (up to 10 MB)</label><input id="pdfFile" type="file" accept="application/pdf,.pdf"></div><div class="field"><label for="textFile">Load a text, Markdown, CSV, JSON, XML or HTML file (up to 1 MB)</label><input id="textFile" type="file" accept=".txt,.md,.csv,.json,.xml,.html,.htm,text/plain,text/csv,application/json,application/xml,text/html"></div><div class="actions"><button id="loadTextFile" type="button" class="ghost">Load file into task text</button></div>
   <div class="actions"><button id="extractPdf" class="ghost" type="button">Extract PDF text</button><button id="ocrPdf" class="ghost" type="button">OCR scanned PDF</button></div>
   <div class="status" id="pdfStatus" role="status" aria-live="polite">PDF text extraction and scanned-document OCR use the authenticated server tools.</div>
+  <div class="field"><label for="imageFile">Load a photo or scanned image for OCR (up to 10 MB)</label><input id="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/tiff,image/bmp"></div>
+  <div class="actions"><button id="ocrImage" class="ghost" type="button">Extract text from image</button></div>
+  <div class="status" id="imageOcrStatus" role="status" aria-live="polite">Choose a photo or scan. The server processes it with bounded local OCR.</div>
   <div class="row">
     <div class="field"><label for="expression">Arithmetic expression</label><input id="expression" maxlength="120" placeholder="1250 * 4 + 300"></div>
     <div class="field"><label for="reminderTitle">Reminder title</label><input id="reminderTitle" maxlength="160" placeholder="Call supplier"></div>
@@ -58,24 +61,204 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Notes and to-do workspace</h3>
+  <p class="muted">Private account-scoped notes and tasks are stored in the backend. Search, edit and delete operations apply only to your account.</p>
+  <div class="row">
+    <div class="field"><label for="noteTitle">Note title</label><input id="noteTitle" maxlength="200" placeholder="Project notes"></div>
+    <div class="field"><label for="noteTags">Tags (comma-separated)</label><input id="noteTags" maxlength="500" placeholder="work, ideas"></div>
+  </div>
+  <div class="field"><label for="noteBody">Note content</label><textarea id="noteBody" maxlength="100000" rows="3" placeholder="Write a note…"></textarea></div>
+  <div class="actions"><button id="saveNote" type="button">Save note</button><button id="refreshNotes" type="button" class="ghost">Refresh notes</button></div><div class="actions"><button id="exportWorkspaceJson" type="button" class="ghost">Export JSON</button><button id="exportWorkspaceCsv" type="button" class="ghost">Export CSV</button></div><div class="row"><div class="field"><label for="workspaceImportFile">Import workspace JSON backup</label><input id="workspaceImportFile" type="file" accept="application/json,.json"></div><div class="field" style="justify-content:end"><button id="importWorkspace" type="button" class="ghost">Import backup</button></div></div>
+  <div class="field"><label for="noteSearch">Search notes</label><input id="noteSearch" maxlength="200" placeholder="Search title or content"></div>
+  <div id="noteList" class="task-list"></div>
+  <div class="divider" style="height:1px;background:#29425d;margin:16px 0"></div>
+  <div class="row">
+    <div class="field"><label for="todoTitle">To-do title</label><input id="todoTitle" maxlength="200" placeholder="Prepare meeting notes"></div>
+    <div class="field"><label for="todoPriority">Priority</label><select id="todoPriority"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+  </div>
+  <div class="field"><label for="todoDescription">Description</label><textarea id="todoDescription" maxlength="4000" rows="2" placeholder="Optional details"></textarea></div>
+  <div class="row">
+    <div class="field"><label for="todoDue">Due date/time (optional)</label><input id="todoDue" type="datetime-local"></div>
+    <div class="field"><label for="todoFilter">Show tasks</label><select id="todoFilter"><option value="all">All</option><option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option><option value="cancelled">Cancelled</option></select></div>
+  </div>
+  <div class="actions"><button id="saveTodo" type="button">Add to-do</button><button id="refreshTodos" type="button" class="ghost">Refresh to-dos</button></div>
+  <div class="status" id="workspaceStatus" role="status" aria-live="polite">Sign in to use notes and to-dos.</div>
+  <div id="todoList" class="task-list"></div>
+  <div class="divider" style="height:1px;background:#29425d;margin:16px 0"></div>
+  <h3>Reminders</h3>
+  <div class="row">
+    <div class="field"><label for="reminderName">Reminder title</label><input id="reminderName" maxlength="160" placeholder="Pay electricity bill"></div>
+    <div class="field"><label for="reminderDue">Due date/time (optional)</label><input id="reminderDue" type="datetime-local"></div>
+  </div>
+  <div class="field"><label for="reminderNotes">Notes</label><input id="reminderNotes" maxlength="2000" placeholder="Optional reminder details"></div>
+  <div class="actions"><button id="saveReminder" type="button">Save reminder</button><button id="refreshReminders" type="button" class="ghost">Refresh reminders</button></div>
+  <div id="reminderList" class="task-list"></div>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Speech and language controls</h3>
+  <p class="muted">These controls use Android's native speech services when this page is open inside Norah. Availability depends on the language packs installed on the phone.</p>
+  <div class="row">
+    <div class="field"><label for="recognitionLanguage">Speech recognition language tag</label><input id="recognitionLanguage" value="en-NG" maxlength="20" placeholder="en-NG"></div>
+    <div class="field"><label for="speechLanguage">Text-to-speech language tag</label><input id="speechLanguage" value="en-NG" maxlength="20" placeholder="en-NG"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="speechRate">Speech rate (0.5–2.0)</label><input id="speechRate" type="number" min="0.5" max="2" step="0.1" value="1"></div>
+    <div class="field"><label for="speechPitch">Speech pitch (0.5–2.0)</label><input id="speechPitch" type="number" min="0.5" max="2" step="0.1" value="1"></div>
+  </div>
+  <div class="field"><label for="speechSample">Test speech text</label><input id="speechSample" maxlength="1000" value="Hello, I am Norah. How can I help you?"></div>
+  <div class="actions"><button id="applyVoiceSettings" type="button">Apply voice settings</button><button id="testSpeech" type="button" class="ghost">Speak test</button><button id="stopSpeech" type="button" class="ghost">Stop speech</button></div>
+  <div class="status" id="voiceStatus" role="status" aria-live="polite">Native speech controls require the Android app.</div>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Connected social accounts</h3>
+  <p class="muted">Connect Instagram, Facebook, X, YouTube or TikTok using provider OAuth. Tokens remain encrypted on the server. Posting and publishing are not enabled by this panel.</p>
+  <div class="actions"><button id="refreshSocial" type="button" class="ghost">Refresh connections</button></div>
+  <div class="status" id="socialStatus" role="status" aria-live="polite">Sign in to view provider connection status.</div>
+  <div id="socialList" class="task-list"></div>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Local audio and video player</h3>
+  <p class="muted">Play media files selected from this device directly in Norah. Files stay in the browser session and are not uploaded.</p>
+  <div class="field"><label for="audioFile">Choose music or audio</label><input id="audioFile" type="file" accept="audio/*"></div>
+  <audio id="localAudioPlayer" controls style="width:100%;margin:8px 0"></audio>
+  <div class="row">
+    <div class="field"><label for="audioSpeed">Audio speed</label><select id="audioSpeed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div>
+    <div class="field"><label for="audioVolume">Volume (0–100)</label><input id="audioVolume" type="range" min="0" max="100" value="80"></div>
+  </div>
+  <div class="field"><label for="videoFile">Choose a video</label><input id="videoFile" type="file" accept="video/*"></div>
+  <video id="localVideoPlayer" controls playsinline style="width:100%;max-height:360px;background:#000;border-radius:12px"></video>
+  <div class="status" id="mediaStatus" role="status" aria-live="polite">Select a local audio or video file to play.</div>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Image tools</h3>
+  <p class="muted">Inspect, resize, rotate, convert to grayscale or compress a user-selected image. Image files are processed by the authenticated backend and returned as downloads.</p>
+  <div class="field"><label for="imageToolFile">Choose image (up to 10 MB)</label><input id="imageToolFile" type="file" accept="image/png,image/jpeg,image/webp,image/tiff,image/bmp"></div>
+  <input id="photoCapture" type="file" accept="image/*" capture="environment" hidden>
+  <input id="videoCapture" type="file" accept="video/*" capture="environment" hidden>
+  <div class="actions"><button id="takePhotoForTools" type="button" class="ghost">Capture photo</button><button id="recordVideoForTools" type="button" class="ghost">Record video</button></div>
+  <div class="row">
+    <div class="field"><label for="imageWidth">Resize width (px)</label><input id="imageWidth" type="number" min="1" max="6000" value="1024"></div>
+    <div class="field"><label for="imageHeight">Resize height (px)</label><input id="imageHeight" type="number" min="1" max="6000" value="1024"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="imageRotate">Rotate</label><select id="imageRotate"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option><option value="-90">90° counter-clockwise</option></select></div>
+    <div class="field"><label for="imageQuality">Compression quality (20–95)</label><input id="imageQuality" type="number" min="20" max="95" value="80"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="imageFormat">Output format</label><select id="imageFormat"><option value="JPEG">JPEG</option><option value="WEBP">WEBP</option><option value="PNG">PNG</option></select></div>
+    <div class="field"><label for="imageFit">Resize behavior</label><select id="imageFit"><option value="true">Preserve aspect ratio</option><option value="false">Exact dimensions</option></select></div>
+  </div>
+  <div class="actions"><button data-image-tool="inspect" type="button" class="ghost">Inspect image</button><button data-image-tool="resize" type="button">Resize and download</button><button data-image-tool="rotate" type="button" class="ghost">Rotate and download</button><button data-image-tool="grayscale" type="button" class="ghost">Grayscale download</button><button data-image-tool="compress" type="button" class="ghost">Compress and download</button></div>
+  <div class="status" id="imageToolStatus" role="status" aria-live="polite">Choose an image to begin.</div>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Direct tool execution</h3>
+  <p class="muted">Run an individual registered tool against explicit JSON arguments. This uses the server allowlist; unsupported actions are not executed.</p>
+  <div class="field"><label for="directToolFilter">Search registered tools</label><input id="directToolFilter" type="search" maxlength="100" placeholder="e.g. JSON, CSV, date, image, validation"></div>
+  <div class="field"><label for="directToolName">Registered tool</label><select id="directToolName"><option value="">Loading tools…</option></select></div>
+  <div class="field"><label for="directToolArgs">Arguments (JSON object)</label><textarea id="directToolArgs" rows="5" maxlength="120000">{ "input": "Paste text here" }</textarea></div>
+  <div class="actions"><button id="runDirectTool" type="button">Run selected tool</button><button id="refreshDirectTools" type="button" class="ghost">Refresh tools</button></div>
+  <div class="status" id="directToolStatus" role="status" aria-live="polite">Sign in to run registered tools.</div>
+  <pre id="directToolResult" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#071321;padding:12px;border-radius:10px;max-height:360px;overflow:auto"></pre>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Safe plugin lifecycle</h3>
+  <p class="muted">Propose plugins using only server-allowlisted built-in tools. No uploaded code is executed. Platform-owner approval and activation are separate steps.</p>
+  <div class="field"><label for="pluginName">Plugin name</label><input id="pluginName" maxlength="48" placeholder="Text review assistant"></div>
+  <div class="field"><label for="pluginCapabilities">Capabilities (JSON array; up to 20)</label><textarea id="pluginCapabilities" rows="3" maxlength="6000">["count_characters","extract_emails"]</textarea></div>
+  <div class="actions"><button id="proposePlugin" type="button">Submit plugin proposal</button><button id="refreshPlugins" type="button" class="ghost">Refresh plugins</button></div>
+  <div class="field"><label for="pluginRunId">Plugin ID</label><input id="pluginRunId" maxlength="80" placeholder="Choose a plugin below"></div>
+  <div class="field"><label for="pluginRunCapability">Capability</label><input id="pluginRunCapability" maxlength="80" placeholder="count_characters"></div>
+  <div class="field"><label for="pluginRunInput">Input text</label><textarea id="pluginRunInput" rows="3" maxlength="120000"></textarea></div>
+  <div class="field"><label for="pluginRunArguments">Extra arguments (JSON object)</label><textarea id="pluginRunArguments" rows="3" maxlength="12000">{}</textarea></div>
+  <div class="actions"><button id="runPlugin" type="button">Run plugin capability</button></div>
+  <div class="status" id="pluginStatus" role="status" aria-live="polite">Sign in to manage plugin proposals.</div>
+  <div id="pluginList" class="task-list"></div>
+  <pre id="pluginResult" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#071321;padding:12px;border-radius:10px;max-height:360px;overflow:auto"></pre>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Signed release and rollback controls</h3>
+  <p class="muted">Owner-only release ledger. Proposals require an Ed25519 signature and configured server keys. This records approval; it does not install code or deploy automatically.</p>
+  <div class="actions"><button id="loadUpdatePolicy" type="button" class="ghost">Load update policy</button><button id="loadReleases" type="button" class="ghost">Refresh releases</button><button id="loadRollbackPlan" type="button" class="ghost">Show rollback plan</button></div>
+  <div class="field"><label for="releaseVersion">Version</label><input id="releaseVersion" maxlength="32" placeholder="v1.0.1"></div>
+  <div class="field"><label for="releaseRevision">Source revision (40-character commit SHA)</label><input id="releaseRevision" maxlength="40"></div>
+  <div class="field"><label for="releaseArtifactHash">Artifact SHA-256 (64 hex characters)</label><input id="releaseArtifactHash" maxlength="64"></div>
+  <div class="field"><label for="releaseSignature">Ed25519 signature (Base64)</label><textarea id="releaseSignature" rows="2" maxlength="512"></textarea></div>
+  <div class="actions"><button id="proposeRelease" type="button">Submit signed release</button></div>
+  <div class="status" id="updateStatus" role="status" aria-live="polite">Update proposals are disabled unless the service administrator enables signed releases.</div>
+  <div id="releaseList" class="task-list"></div>
+  <pre id="updateResult" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#071321;padding:12px;border-radius:10px;max-height:360px;overflow:auto"></pre>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Multi-step workflows</h3>
+  <p class="muted">Compose a sequence of supported local steps. Review the saved workflow, approve it, then run it explicitly. Message steps produce drafts only.</p>
+  <div class="field"><label for="workflowName">Workflow name</label><input id="workflowName" maxlength="100" placeholder="Prepare meeting materials"></div>
+  <div class="field"><label for="workflowSteps">Steps (JSON array)</label><textarea id="workflowSteps" maxlength="30000" rows="5">[
+  {"type":"summarize_text","input":"Paste text to summarize"},
+  {"type":"draft_message","input":"Draft a follow-up message"}
+]</textarea></div>
+  <div class="actions"><button id="saveWorkflow" type="button">Save workflow</button><button id="refreshWorkflows" type="button" class="ghost">Refresh workflows</button></div>
+  <div class="status" id="workflowStatus" role="status" aria-live="polite">Sign in to manage workflows.</div>
+  <div id="workflowList" class="task-list"></div>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <h3>Scheduled automations</h3>
+  <p class="muted">Schedule a registered bounded local action. Runs are recorded with retry outcomes. This does not send messages, publish content, or perform financial transactions.</p>
+  <div class="row">
+    <div class="field"><label for="automationName">Automation name</label><input id="automationName" maxlength="120" placeholder="Daily document summary"></div>
+    <div class="field"><label for="automationAction">Action</label><select id="automationAction"><option value="">Loading registered actions…</option></select></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="automationInterval">Repeat interval (minutes, 1–525600)</label><input id="automationInterval" type="number" min="1" max="525600" value="1440"></div>
+    <div class="field"><label for="automationNext">First run time</label><input id="automationNext" type="datetime-local"></div>
+  </div>
+  <div class="field"><label for="automationArgs">Action arguments (JSON)</label><textarea id="automationArgs" maxlength="120000" rows="4">{ "input": "Add text to process" }</textarea></div>
+  <div class="row">
+    <div class="field"><label for="automationRetries">Maximum retries (0–5)</label><input id="automationRetries" type="number" min="0" max="5" value="2"></div>
+    <div class="field"><label>Execution history</label><button id="refreshAutomations" type="button" class="ghost">Refresh automations</button></div>
+  </div>
+  <div class="actions"><button id="saveAutomation" type="button">Save scheduled automation</button></div>
+  <div class="status" id="automationStatus" role="status" aria-live="polite">Sign in to manage scheduled automations.</div>
+  <div id="automationList" class="task-list"></div>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Android device actions</h3>
   <p class="muted">These buttons use the native Android bridge when opened inside the Norah Android app. On a regular browser, device-specific actions are unavailable. Android opens the relevant system app for you to review; it does not silently send messages or place calls.</p>
   <div class="row">
     <div class="field"><label for="deviceQuery">Search, destination or location</label><input id="deviceQuery" maxlength="300" placeholder="e.g. nearest pharmacy or 12 Market Road"></div>
     <div class="field"><label for="deviceShareText">Text to share</label><input id="deviceShareText" maxlength="8000" placeholder="Text to share through Android chooser"></div>
   </div>
+  <div class="row">
+    <div class="field"><label for="devicePhoneNumber">Phone number</label><input id="devicePhoneNumber" maxlength="40" placeholder="+234…"></div>
+    <div class="field"><label for="deviceMessageText">SMS draft text</label><input id="deviceMessageText" maxlength="4000" placeholder="Message text for review"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="deviceEmailAddress">Email address</label><input id="deviceEmailAddress" maxlength="254" placeholder="person@example.com"></div>
+    <div class="field"><label for="deviceEmailSubject">Email subject</label><input id="deviceEmailSubject" maxlength="200" placeholder="Subject"></div>
+  </div>
+  <div class="field"><label for="deviceEmailBody">Email draft body</label><textarea id="deviceEmailBody" maxlength="4000" rows="2" placeholder="Draft body for review"></textarea></div>
   <div class="device-grid">
     <button data-native="takePicture">Take photo</button><button data-native="recordVideo">Record video</button><button data-native="openMusic">Open music</button><button data-native="openMaps">Open maps</button>
     <button data-native="searchWeb">Search web</button><button data-native="openCalendar">Open calendar</button><button data-native="openClock">Open clock</button><button data-native="openContacts">Open contacts</button>
-    <button data-native="openMessages">Open messages</button><button data-native="shareText">Share text</button><button data-native="openWifiSettings">Wi-Fi settings</button><button data-native="openBluetoothSettings">Bluetooth settings</button>
-    <button data-native="openLocationSettings">Location settings</button><button data-native="openNotificationSettings">Notification settings</button><button data-native="openAppSettings">Norah app settings</button>
+    <button data-native="openMessages">Open messages</button><button data-native="pickContact">Pick contact</button><button data-native="makeCall">Open call dialer</button><button data-native="sendMessage">Draft SMS</button><button data-native="draftEmail">Draft email</button><button data-native="shareText">Share text</button><button data-native="openWifiSettings">Wi-Fi settings</button><button data-native="openBluetoothSettings">Bluetooth settings</button>
+    <button data-native="openLocationSettings">Location settings</button><button data-native="openNotificationSettings">Notification settings</button><button data-native="openAppSettings">Norah app settings</button><button data-native="openFiles">Browse files</button><button data-native="openCalculator">Open calculator</button><button data-native="openPhoneDialer">Open phone dialer</button><button data-native="openEmail">Open email</button><button data-native="openSystemSettings">System settings</button><button data-native="openBrowser">Open browser</button><button data-native="openDownloads">Open downloads</button><button data-native="openYouTube">Open YouTube</button><button data-native="openBatterySettings">Battery settings</button><button data-native="openDisplaySettings">Display settings</button><button data-native="openSoundSettings">Sound settings</button><button data-native="openAccessibilitySettings">Accessibility settings</button><button data-native="openPhotos">Open photos</button><button data-native="openVideoLibrary">Open videos</button><button data-native="openVoiceRecorder">Voice recorder</button><button data-native="openStorageSettings">Storage settings</button><button data-native="openPlayStore">Play Store</button><button data-native="copyToClipboard">Copy text</button><button data-native="openAlarmSettings">Alarm settings</button><button data-native="openLanguageSettings">Language settings</button><button data-native="openSecuritySettings">Security settings</button>
   </div>
   <div class="status" id="deviceStatus" role="status" aria-live="polite" style="margin-top:12px">Native actions require the Android app and any relevant device permissions.</div>
 </section>
 </div>
 <script>
 const $=id=>document.getElementById(id);
-let authenticated=false, tasks=[];
+let authenticated=false, tasks=[], directToolCatalog=[];
 function safeText(value){return String(value??"")}
 function pretty(value){return JSON.stringify(value,null,2)}
 async function api(path,options={}){const response=await fetch(path,{credentials:"same-origin",...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});const data=await response.json().catch(()=>({detail:"The server returned an unreadable response."}));if(!response.ok)throw new Error(data.detail||("Request failed ("+response.status+")"));return data}
@@ -86,12 +269,457 @@ $("createTask").addEventListener("click",async()=>{if(!authenticated)return;cons
 async function runTask(id){if(!confirm("Run this plan now? Only the listed supported actions will execute."))return;try{$("historyStatus").textContent="Executing reviewed task…";const data=await api("/v1/agent/tasks/"+encodeURIComponent(id)+"/run",{method:"POST",body:"{}"});const scheduling=[];for(const item of (data.task?.results||[])){const result=item.result||{};if(item.action!=="create_reminder"||result.status!=="succeeded"||!result.reminder_id||!result.due_at)continue;const due=Date.parse(result.due_at);const bridge=window.AdaptiveDevice;if(!Number.isFinite(due)||!bridge||typeof bridge.scheduleReminder!=="function"){scheduling.push("Reminder saved, but local Android notification was not scheduled (open Norah on Android and use a valid future date/time).");continue}const scheduled=bridge.scheduleReminder(result.reminder_id,result.title||"Norah reminder",due);scheduling.push(scheduled?"Local Android reminder notification scheduled.":"Reminder saved, but Android could not schedule its notification; check notification permission and due time.")} $("historyStatus").textContent=[data.message,...scheduling].join(" ");await refreshTasks()}catch(e){$("historyStatus").textContent=e.message}}
 async function cancelTask(id){try{await api("/v1/agent/tasks/"+encodeURIComponent(id)+"/cancel",{method:"POST",body:"{}"});await refreshTasks()}catch(e){$("historyStatus").textContent=e.message}}
 async function processPdf(ocr){if(!authenticated){$("pdfStatus").textContent="Sign in on the main Norah page first.";$("pdfStatus").classList.add("error");return}const file=$("pdfFile").files[0];if(!file){$("pdfStatus").textContent="Choose a PDF file first.";$("pdfStatus").classList.add("error");return}if(file.size>10*1024*1024){$("pdfStatus").textContent="PDF must be 10 MB or smaller.";$("pdfStatus").classList.add("error");return}const button=$(ocr?"ocrPdf":"extractPdf");button.disabled=true;$("pdfStatus").textContent=ocr?"Running scanned PDF OCR…":"Extracting embedded PDF text…";$("pdfStatus").classList.remove("error");try{const form=new FormData();form.append("file",file);const response=await fetch(ocr?"/v1/assistant/documents/ocr-pdf":"/v1/assistant/documents/extract-pdf",{method:"POST",credentials:"same-origin",body:form});const data=await response.json().catch(()=>({detail:"The server returned an unreadable response."}));if(!response.ok)throw new Error(data.detail||"PDF processing failed.");$("taskText").value=data.text||"";if(!$("goal").value.trim())$("goal").value=ocr?"Summarize this scanned document":"Summarize this document";$("pdfStatus").textContent=(ocr?"OCR finished. ":"PDF extraction finished. ")+(data.page_count||data.processed_pages||0)+" page(s), "+(data.character_count||0)+" characters loaded into the task text field."+(data.method?" Method: "+data.method:"");if(!(data.text||"").trim())$("pdfStatus").textContent+=" No embedded text was found. Try the OCR button for scanned pages."}catch(e){$("pdfStatus").textContent=e.message;$("pdfStatus").classList.add("error")}finally{button.disabled=false}}
-$("extractPdf").addEventListener("click",()=>processPdf(false));$("ocrPdf").addEventListener("click",()=>processPdf(true));
-document.querySelectorAll("[data-native]").forEach(button=>button.addEventListener("click",()=>{const action=button.dataset.native;const status=$("deviceStatus");const bridge=window.AdaptiveDevice;if(!bridge||typeof bridge[action]!=="function"){status.textContent="This action is only available inside the Norah Android app. No device action was performed.";status.classList.add("error");return}try{let result;if(action==="openMaps"||action==="searchWeb")result=bridge[action]($("deviceQuery").value.trim());else if(action==="shareText")result=bridge[action]($("deviceShareText").value.trim());else result=bridge[action]();status.textContent=result===false?"Android could not open the requested app or settings. Check whether a compatible app is installed.":"Android accepted the request. Complete any remaining steps in the opened system app.";status.classList.toggle("error",result===false)}catch(e){status.textContent="Android action failed: "+e.message;status.classList.add("error")}}));
+$("extractPdf").addEventListener("click",()=>processPdf(false));$("ocrPdf").addEventListener("click",()=>processPdf(true));$("loadTextFile").addEventListener("click",async()=>{
+  const status=$("pdfStatus"),file=$("textFile").files[0];
+  if(!file){status.textContent="Choose a supported text file first.";return}
+  if(file.size>1024*1024){status.textContent="Text file must be 1 MB or smaller.";return}
+  try{
+    const textValue=await file.text();
+    if(textValue.includes("\u0000"))throw new Error("This file appears to be binary; choose a text-based document.");
+    $("taskText").value=textValue.slice(0,120000);
+    if(!$("goal").value.trim())$("goal").value="Analyze this file: "+file.name;
+    status.textContent="Loaded "+file.name+" ("+textValue.length+" characters) into task text.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+
+async function processImageOcr(){
+  if(!authenticated){$("imageOcrStatus").textContent="Sign in on the main Norah page first.";return}
+  const file=$("imageFile").files[0]; if(!file){$("imageOcrStatus").textContent="Choose an image first.";return}
+  if(file.size>10*1024*1024){$("imageOcrStatus").textContent="Image must be 10 MB or smaller.";return}
+  const button=$("ocrImage"); button.disabled=true; $("imageOcrStatus").textContent="Extracting text from image…";
+  try{
+    const form=new FormData();form.append("file",file);
+    const response=await fetch("/v1/assistant/documents/ocr-image",{method:"POST",credentials:"same-origin",body:form});
+    const data=await response.json().catch(()=>({detail:"The server returned an unreadable response."}));
+    if(!response.ok)throw new Error(data.detail||"Image OCR failed.");
+    $("taskText").value=data.text||"";if(!$("goal").value.trim())$("goal").value="Summarize this image text";
+    $("imageOcrStatus").textContent="Image OCR finished. "+(data.character_count||0)+" characters loaded into task text. Method: "+(data.method||"local OCR")+".";
+  }catch(e){$("imageOcrStatus").textContent=e.message;$("imageOcrStatus").classList.add("error")}
+  finally{button.disabled=false}
+}
+$("ocrImage").addEventListener("click",processImageOcr);
+
+window.NorahContactPicked=function(number){$("devicePhoneNumber").value=number||"";$("deviceStatus").textContent=number?"Selected contact number filled in. Review it before placing a call or drafting a message.":"No phone number was returned from the selected contact."};
+document.querySelectorAll("[data-native]").forEach(button=>button.addEventListener("click",()=>{const action=button.dataset.native;const status=$("deviceStatus");const bridge=window.AdaptiveDevice;if(!bridge||typeof bridge[action]!=="function"){status.textContent="This action is only available inside the Norah Android app. No device action was performed.";status.classList.add("error");return}try{let result;if(action==="openMaps"||action==="searchWeb")result=bridge[action]($("deviceQuery").value.trim());else if(action==="shareText"||action==="copyToClipboard")result=bridge[action]($("deviceShareText").value.trim());else if(action==="makeCall")result=bridge[action]($("devicePhoneNumber").value.trim());else if(action==="sendMessage")result=bridge[action]($("devicePhoneNumber").value.trim(),$("deviceMessageText").value);else if(action==="draftEmail")result=bridge[action]($("deviceEmailAddress").value.trim(),$("deviceEmailSubject").value,$("deviceEmailBody").value);else result=bridge[action]();status.textContent=result===false?"Android could not open the requested app or settings. Check whether a compatible app is installed.":"Android accepted the request. Complete any remaining steps in the opened system app.";status.classList.toggle("error",result===false)}catch(e){status.textContent="Android action failed: "+e.message;status.classList.add("error")}}));
 async function runResearch(){const query=$("researchQuery").value.trim();const status=$("researchStatus");const results=$("researchResults");results.replaceChildren();if(!authenticated){status.textContent="Sign in on the main Norah page before searching.";status.classList.add("error");return}if(query.length<2){status.textContent="Enter a research question with at least two characters.";status.classList.add("error");return}const button=$("researchSearch");button.disabled=true;status.textContent="Checking research provider and searching…";status.classList.remove("error");try{const config=await api("/v1/research/status");if(!config.configured)throw new Error("Web research is not configured. The service administrator must set TAVILY_API_KEY.");const data=await api("/v1/research/search",{method:"POST",body:JSON.stringify({query,max_results:Number($("researchLimit").value)})});status.textContent="Found "+data.result_count+" result(s) for: "+data.query;for(const item of data.results||[]){const card=document.createElement("article");card.className="task";const link=document.createElement("a");link.href=item.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent=item.title||item.url;const snippet=document.createElement("p");snippet.className="muted";snippet.textContent=item.snippet||"No snippet available.";const url=document.createElement("div");url.className="muted";url.textContent=item.url;card.append(link,snippet,url);results.append(card)}if(!data.result_count)status.textContent+=" No safe HTTP/HTTPS results were returned."}catch(e){status.textContent=e.message;status.classList.add("error")}finally{button.disabled=false}}
+async function loadReminders(){
+  const list=$("reminderList"),status=$("workspaceStatus");
+  try{
+    const data=await api("/v1/assistant/reminders");list.replaceChildren();
+    for(const reminder of (data.reminders||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=reminder.title;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent=reminder.status+" · due "+(reminder.due_at||"not set");
+      const body=document.createElement("p");body.textContent=reminder.notes||"";
+      const actions=document.createElement("div");actions.className="task-actions";
+      for(const state of ["completed","cancelled"]){const button=document.createElement("button");button.className="ghost";button.textContent=state==="completed"?"Complete":"Cancel";button.addEventListener("click",async()=>{try{await api("/v1/assistant/reminders/"+encodeURIComponent(reminder.id)+"?status="+state,{method:"PATCH",body:"{}"});const bridge=window.AdaptiveDevice;if(bridge&&typeof bridge.cancelReminder==="function")bridge.cancelReminder(reminder.id);await loadReminders()}catch(e){status.textContent=e.message}});actions.append(button)}
+      const remove=document.createElement("button");remove.className="ghost";remove.textContent="Delete";remove.addEventListener("click",async()=>{if(!confirm("Delete this reminder?"))return;try{await api("/v1/assistant/reminders/"+encodeURIComponent(reminder.id),{method:"DELETE",body:"{}"});await loadReminders()}catch(e){status.textContent=e.message}});
+      actions.append(remove);card.append(title,meta,body,actions);list.append(card);
+    }
+  }catch(e){status.textContent=e.message}
+}
+$("saveReminder").addEventListener("click",async()=>{
+  const status=$("workspaceStatus");
+  try{const title=$("reminderName").value.trim();if(!title)throw new Error("Enter a reminder title.");
+    const local=$("reminderDue").value;const due=local?new Date(local).toISOString():null;
+    const saved=await api("/v1/assistant/reminders",{method:"POST",body:JSON.stringify({title,due_at:due,notes:$("reminderNotes").value})});
+    let notification="";const bridge=window.AdaptiveDevice;if(due&&saved.reminder&&bridge&&typeof bridge.scheduleReminder==="function"){const ok=bridge.scheduleReminder(saved.reminder.id,title,new Date(due).getTime());notification=ok?" Local Android notification scheduled.":" Reminder saved, but Android notification could not be scheduled; check permission and date."}
+    $("reminderName").value="";$("reminderDue").value="";$("reminderNotes").value="";status.textContent="Reminder saved."+notification;await loadReminders();
+  }catch(e){status.textContent=e.message}
+});
+$("refreshReminders").addEventListener("click",loadReminders);
+async function loadNotes(){
+  const list=$("noteList"), status=$("workspaceStatus");
+  try{
+    const data=await api("/v1/workspace/notes?q="+encodeURIComponent($("noteSearch").value.trim()));
+    list.replaceChildren();
+    for(const note of (data.notes||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=note.title;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent=(note.tags||[]).join(", ")+" · updated "+new Date(note.updated_at).toLocaleString();
+      const body=document.createElement("pre");body.textContent=note.body;
+      const actions=document.createElement("div");actions.className="task-actions";
+      const edit=document.createElement("button");edit.className="ghost";edit.textContent="Edit";
+      edit.addEventListener("click",async()=>{const titleValue=prompt("Edit note title",note.title);if(titleValue===null)return;const bodyValue=prompt("Edit note content",note.body);if(bodyValue===null)return;try{await api("/v1/workspace/notes/"+encodeURIComponent(note.id),{method:"PATCH",body:JSON.stringify({title:titleValue,body:bodyValue})});await loadNotes()}catch(e){status.textContent=e.message}});
+      const remove=document.createElement("button");remove.className="ghost";remove.textContent="Delete";
+      remove.addEventListener("click",async()=>{if(!confirm("Delete this note?"))return;try{await api("/v1/workspace/notes/"+encodeURIComponent(note.id),{method:"DELETE",body:"{}"});await loadNotes()}catch(e){status.textContent=e.message}});
+      actions.append(edit,remove);card.append(title,meta,body,actions);list.append(card);
+    }
+  }catch(e){status.textContent=e.message}
+}
+async function loadTodos(){
+  const list=$("todoList"), status=$("workspaceStatus");
+  try{
+    const data=await api("/v1/workspace/todos?status="+encodeURIComponent($("todoFilter").value));
+    list.replaceChildren();
+    for(const todo of (data.todos||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=todo.title;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent=todo.status+" · "+todo.priority+" · due "+(todo.due_at||"not set");
+      const body=document.createElement("p");body.textContent=todo.description||"";
+      const actions=document.createElement("div");actions.className="task-actions";
+      const next=document.createElement("button");next.textContent=todo.status==="done"?"Reopen":"Mark done";
+      next.addEventListener("click",async()=>{try{await api("/v1/workspace/todos/"+encodeURIComponent(todo.id),{method:"PATCH",body:JSON.stringify({status:todo.status==="done"?"open":"done"})});await loadTodos()}catch(e){status.textContent=e.message}});
+      const remove=document.createElement("button");remove.className="ghost";remove.textContent="Delete";
+      remove.addEventListener("click",async()=>{if(!confirm("Delete this to-do?"))return;try{await api("/v1/workspace/todos/"+encodeURIComponent(todo.id),{method:"DELETE",body:"{}"});await loadTodos()}catch(e){status.textContent=e.message}});
+      actions.append(next,remove);card.append(title,meta,body,actions);list.append(card);
+    }
+    status.textContent=(data.todos||[]).length+" to-do item(s) loaded.";
+  }catch(e){status.textContent=e.message}
+}
+$("saveNote").addEventListener("click",async()=>{
+  const status=$("workspaceStatus");
+  try{const title=$("noteTitle").value.trim();if(!title)throw new Error("Enter a note title.");
+    const tags=$("noteTags").value.split(",").map(x=>x.trim()).filter(Boolean);
+    await api("/v1/workspace/notes",{method:"POST",body:JSON.stringify({title,body:$("noteBody").value,tags})});
+    $("noteTitle").value="";$("noteBody").value="";$("noteTags").value="";status.textContent="Note saved.";await loadNotes();
+  }catch(e){status.textContent=e.message}
+});
+$("saveTodo").addEventListener("click",async()=>{
+  const status=$("workspaceStatus");
+  try{const title=$("todoTitle").value.trim();if(!title)throw new Error("Enter a to-do title.");
+    const local=$("todoDue").value;const due=local?new Date(local).toISOString():null;
+    await api("/v1/workspace/todos",{method:"POST",body:JSON.stringify({title,description:$("todoDescription").value,due_at:due,priority:$("todoPriority").value})});
+    $("todoTitle").value="";$("todoDescription").value="";$("todoDue").value="";status.textContent="To-do saved.";await loadTodos();
+  }catch(e){status.textContent=e.message}
+});
+$("importWorkspace").addEventListener("click",async()=>{
+  const file=$("workspaceImportFile").files[0],status=$("workspaceStatus");
+  if(!file){status.textContent="Choose a JSON backup file first.";return}
+  if(file.size>5*1024*1024){status.textContent="Backup must be 5 MB or smaller.";return}
+  try{
+    const parsed=JSON.parse(await file.text());
+    if(!parsed||typeof parsed!=="object"||(!Array.isArray(parsed.notes)&&!Array.isArray(parsed.todos)))throw new Error("Backup must contain notes and/or todos arrays.");
+    const result=await api("/v1/workspace/import",{method:"POST",body:JSON.stringify({notes:parsed.notes||[],todos:parsed.todos||[]})});
+    status.textContent="Imported "+result.imported.notes+" notes and "+result.imported.todos+" to-dos.";
+    await loadNotes();await loadTodos();
+  }catch(e){status.textContent=e.message}
+});
+$("exportWorkspaceJson").addEventListener("click",()=>window.location.assign("/v1/workspace/export?format=json"));
+$("exportWorkspaceCsv").addEventListener("click",()=>window.location.assign("/v1/workspace/export?format=csv"));
+$("refreshNotes").addEventListener("click",loadNotes);$("refreshTodos").addEventListener("click",loadTodos);
+$("noteSearch").addEventListener("change",loadNotes);$("todoFilter").addEventListener("change",loadTodos);
+const nativeSpeech=()=>window.AdaptiveNative;
+$("applyVoiceSettings").addEventListener("click",()=>{
+  const bridge=nativeSpeech(), status=$("voiceStatus");
+  if(!bridge){status.textContent="Native speech settings are available only inside the Norah Android app.";return}
+  const recog=$("recognitionLanguage").value.trim(), speak=$("speechLanguage").value.trim();
+  const rate=Number($("speechRate").value), pitch=Number($("speechPitch").value);
+  const a=bridge.setRecognitionLanguage(recog), b=bridge.setSpeechLanguage(speak), d=bridge.setSpeechRate(rate), e=bridge.setSpeechPitch(pitch);
+  status.textContent="Recognition language: "+(a?"accepted":"not accepted")+"; speech language: "+(b?"accepted":"unavailable or unsupported")+"; rate: "+(d?"set":"invalid")+"; pitch: "+(e?"set":"invalid")+".";
+});
+$("testSpeech").addEventListener("click",()=>{
+  const bridge=nativeSpeech(), status=$("voiceStatus");
+  if(!bridge||typeof bridge.speak!=="function"){status.textContent="Native text-to-speech is unavailable in this browser.";return}
+  const ok=bridge.speak($("speechSample").value);status.textContent=ok?"Speech request accepted.":"Speech request could not be started.";
+});
+$("stopSpeech").addEventListener("click",()=>{
+  const bridge=nativeSpeech();if(bridge&&typeof bridge.stop==="function"){bridge.stop();$("voiceStatus").textContent="Speech stopped."}else $("voiceStatus").textContent="Native speech is unavailable in this browser.";
+});
+async function loadSocial(){
+  const status=$("socialStatus"), list=$("socialList");
+  try{
+    const data=await api("/v1/social/providers");
+    list.replaceChildren();
+    for(const provider of (data.providers||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=provider.provider.toUpperCase();
+      const meta=document.createElement("p");meta.className="muted";meta.textContent="Status: "+provider.status+" · "+(provider.configured?"credentials configured":"provider credentials required");
+      const actions=document.createElement("div");actions.className="task-actions";
+      if(!provider.connected){
+        const connect=document.createElement("button");connect.textContent="Connect";
+        connect.disabled=!provider.configured;
+        connect.addEventListener("click",()=>{window.location.assign("/v1/social/"+encodeURIComponent(provider.provider)+"/connect")});
+        actions.append(connect);
+      }else{
+        const profile=document.createElement("button");profile.className="ghost";profile.textContent="View profile";
+        profile.addEventListener("click",async()=>{try{const result=await api("/v1/social/"+encodeURIComponent(provider.provider)+"/profile");meta.textContent="Connected profile: "+pretty(result.profile)}catch(e){status.textContent=e.message}});
+        const disconnect=document.createElement("button");disconnect.className="ghost";disconnect.textContent="Disconnect";
+        disconnect.addEventListener("click",async()=>{if(!confirm("Delete Norah's stored token for "+provider.provider+"?"))return;try{await api("/v1/social/"+encodeURIComponent(provider.provider)+"/disconnect",{method:"DELETE",body:"{}"});await loadSocial()}catch(e){status.textContent=e.message}});
+        actions.append(profile,disconnect);
+      }
+      card.append(title,meta,actions);list.append(card);
+    }
+    status.textContent=(data.providers||[]).length+" provider(s) loaded. OAuth requires credentials configured by the service administrator.";
+  }catch(e){status.textContent=e.message}
+}
+$("refreshSocial").addEventListener("click",loadSocial);
+let localAudioUrl=null,localVideoUrl=null;
+$("audioFile").addEventListener("change",()=>{
+  const file=$("audioFile").files[0];if(!file)return;
+  if(localAudioUrl)URL.revokeObjectURL(localAudioUrl);
+  localAudioUrl=URL.createObjectURL(file);const player=$("localAudioPlayer");
+  player.src=localAudioUrl;player.load();$("mediaStatus").textContent="Loaded audio: "+file.name;
+});
+$("videoFile").addEventListener("change",()=>{
+  const file=$("videoFile").files[0];if(!file)return;
+  if(localVideoUrl)URL.revokeObjectURL(localVideoUrl);
+  localVideoUrl=URL.createObjectURL(file);const player=$("localVideoPlayer");
+  player.src=localVideoUrl;player.load();$("mediaStatus").textContent="Loaded video: "+file.name;
+});
+$("audioSpeed").addEventListener("change",()=>$("localAudioPlayer").playbackRate=Number($("audioSpeed").value));
+$("audioVolume").addEventListener("input",()=>$("localAudioPlayer").volume=Number($("audioVolume").value)/100);
+$("localAudioPlayer").volume=.8;
+function setFileInputFromCapture(targetId,file){
+  const input=$(targetId),transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;
+}
+$("takePhotoForTools").addEventListener("click",()=>$("photoCapture").click());
+$("recordVideoForTools").addEventListener("click",()=>$("videoCapture").click());
+$("photoCapture").addEventListener("change",()=>{
+  const file=$("photoCapture").files[0];if(!file)return;
+  setFileInputFromCapture("imageToolFile",file);setFileInputFromCapture("imageFile",file);
+  $("imageToolStatus").textContent="Photo captured. Use image tools or OCR on the captured photo.";
+  $("imageOcrStatus").textContent="Photo captured. Tap Extract text from image to run OCR.";
+});
+$("videoCapture").addEventListener("change",()=>{
+  const file=$("videoCapture").files[0];if(!file)return;
+  setFileInputFromCapture("videoFile",file);$("videoFile").dispatchEvent(new Event("change"));
+  $("mediaStatus").textContent="Video captured. Playback is ready.";
+});
+async function runImageTool(action){
+  const status=$("imageToolStatus"),file=$("imageToolFile").files[0];
+  if(!file){status.textContent="Choose an image first.";return}
+  if(file.size>10*1024*1024){status.textContent="Image must be 10 MB or smaller.";return}
+  const button=document.querySelector('[data-image-tool="'+action+'"]');if(button)button.disabled=true;
+  status.textContent="Processing image…";
+  try{
+    if(action==="inspect"){
+      const form=new FormData();form.append("file",file);
+      const response=await fetch("/v1/assistant/images/inspect",{method:"POST",credentials:"same-origin",body:form});
+      const data=await response.json().catch(()=>({detail:"Unreadable server response"}));
+      if(!response.ok)throw new Error(data.detail||"Image inspection failed.");
+      status.textContent=pretty(data);return;
+    }
+    const form=new FormData();form.append("file",file);
+    let url="/v1/assistant/images/"+action;
+    const params=new URLSearchParams();
+    if(action==="resize"){params.set("width",$("imageWidth").value);params.set("height",$("imageHeight").value);params.set("fit",$("imageFit").value)}
+    if(action==="rotate")params.set("degrees",$("imageRotate").value);
+    if(action==="compress"){params.set("quality",$("imageQuality").value);params.set("output_format",$("imageFormat").value)}
+    if(params.toString())url+="?"+params.toString();
+    const response=await fetch(url,{method:"POST",credentials:"same-origin",body:form});
+    if(!response.ok){const data=await response.json().catch(()=>({detail:"Image processing failed."}));throw new Error(data.detail||"Image processing failed.")}
+    const blob=await response.blob(),objectUrl=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=objectUrl;link.download="norah-"+action+"."+(blob.type.includes("jpeg")?"jpg":blob.type.includes("webp")?"webp":"png");
+    document.body.append(link);link.click();link.remove();URL.revokeObjectURL(objectUrl);
+    status.textContent="Image processed and download requested.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+  finally{if(button)button.disabled=false}
+}
+document.querySelectorAll("[data-image-tool]").forEach(button=>button.addEventListener("click",()=>runImageTool(button.dataset.imageTool)));
+function renderDirectToolOptions(){
+  const select=$("directToolName"),query=$("directToolFilter").value.trim().toLowerCase(),previous=select.value;
+  select.replaceChildren();
+  const filtered=directToolCatalog.filter(tool=>!query||(tool.name+" "+(tool.description||"")).toLowerCase().includes(query));
+  for(const tool of filtered){
+    const option=document.createElement("option");option.value=tool.name;option.textContent=tool.name+" — "+(tool.description||"");select.append(option);
+  }
+  if(filtered.some(tool=>tool.name===previous))select.value=previous;
+  $("directToolStatus").textContent=filtered.length+" of "+directToolCatalog.length+" registered tool(s) shown.";
+}
+async function loadDirectTools(){
+  const status=$("directToolStatus");
+  try{
+    const data=await api("/v1/tools");
+    directToolCatalog=(data.tools||[]).filter(tool=>tool.status==="implemented");
+    renderDirectToolOptions();
+  }catch(e){status.textContent=e.message}
+}
+$("directToolFilter").addEventListener("input",renderDirectToolOptions);
+$("refreshDirectTools").addEventListener("click",loadDirectTools);
+$("runDirectTool").addEventListener("click",async()=>{
+  const status=$("directToolStatus"),output=$("directToolResult");
+  try{
+    const name=$("directToolName").value;if(!name)throw new Error("Choose a registered tool.");
+    let args;try{args=JSON.parse($("directToolArgs").value||"{}")}catch(_){throw new Error("Arguments must be valid JSON.")}
+    if(!args||Array.isArray(args)||typeof args!=="object")throw new Error("Arguments must be a JSON object.");
+    $("runDirectTool").disabled=true;status.textContent="Running "+name+"…";
+    const result=await api("/v1/tools/execute",{method:"POST",body:JSON.stringify({name,arguments:args})});
+    output.textContent=pretty(result.result);status.textContent="Tool finished. Review the result before using it elsewhere.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+  finally{$("runDirectTool").disabled=false}
+});
+async function loadPlugins(){
+  const status=$("pluginStatus"),list=$("pluginList");
+  try{
+    const data=await api("/v1/plugin-runtime/plugins");list.replaceChildren();
+    for(const plugin of (data.plugins||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=plugin.name+" — "+plugin.status;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent="ID: "+plugin.id+" · "+plugin.capabilities.join(", ");
+      const actions=document.createElement("div");actions.className="task-actions";
+      const use=document.createElement("button");use.className="ghost";use.textContent="Use plugin";
+      use.addEventListener("click",()=>{$("pluginRunId").value=plugin.id;$("pluginRunCapability").value=plugin.capabilities[0]||""});
+      actions.append(use);
+      if(plugin.status==="pending_review"){
+        const b=document.createElement("button");b.className="ghost";b.textContent="Approve (owner)";
+        b.addEventListener("click",async()=>{try{await api("/v1/plugin-runtime/plugins/"+encodeURIComponent(plugin.id)+"/approve",{method:"POST",body:"{}"});await loadPlugins()}catch(e){status.textContent=e.message}});
+        actions.append(b);
+      }
+      if(plugin.status==="approved"){
+        const b=document.createElement("button");b.textContent="Activate (owner)";
+        b.addEventListener("click",async()=>{try{await api("/v1/plugin-runtime/plugins/"+encodeURIComponent(plugin.id)+"/activate",{method:"POST",body:"{}"});await loadPlugins()}catch(e){status.textContent=e.message}});
+        actions.append(b);
+      }
+      card.append(title,meta,actions);list.append(card);
+    }
+    status.textContent=(data.plugins||[]).length+" plugin proposal(s) loaded.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+}
+$("proposePlugin").addEventListener("click",async()=>{
+  const status=$("pluginStatus");
+  try{
+    const name=$("pluginName").value.trim();let capabilities;
+    try{capabilities=JSON.parse($("pluginCapabilities").value)}catch(_){throw new Error("Capabilities must be a JSON array.")}
+    if(!name)throw new Error("Enter a plugin name.");
+    if(!Array.isArray(capabilities)||!capabilities.length||capabilities.length>20||capabilities.some(x=>typeof x!=="string"))throw new Error("Provide 1–20 capability names.");
+    const result=await api("/v1/plugin-runtime/proposals",{method:"POST",body:JSON.stringify({name,capabilities})});
+    $("pluginRunId").value=result.id;status.textContent="Proposal submitted; it is not executable until approved and activated.";await loadPlugins();
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+$("refreshPlugins").addEventListener("click",loadPlugins);
+$("runPlugin").addEventListener("click",async()=>{
+  const status=$("pluginStatus");
+  try{
+    const id=$("pluginRunId").value.trim(),capability=$("pluginRunCapability").value.trim();
+    if(!id||!capability)throw new Error("Choose a plugin and capability first.");
+    let args;try{args=JSON.parse($("pluginRunArguments").value||"{}")}catch(_){throw new Error("Extra arguments must be valid JSON.")}
+    if(!args||Array.isArray(args)||typeof args!=="object")throw new Error("Extra arguments must be a JSON object.");
+    const result=await api("/v1/plugin-runtime/plugins/"+encodeURIComponent(id)+"/run",{method:"POST",body:JSON.stringify({capability,input:$("pluginRunInput").value,arguments:args})});
+    $("pluginResult").textContent=pretty(result);status.textContent="Built-in plugin capability completed.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+async function loadUpdatePolicy(){
+  const status=$("updateStatus");
+  try{const data=await api("/v1/updates/policy");$("updateResult").textContent=pretty(data);status.textContent="Policy loaded: "+(data.enabled?"signed update proposals enabled":"signed update proposals disabled")+"; deployment is external.";status.classList.remove("error")}
+  catch(e){status.textContent=e.message;status.classList.add("error")}
+}
+async function loadReleases(){
+  const status=$("updateStatus"),list=$("releaseList");
+  try{
+    const data=await api("/v1/updates/releases");list.replaceChildren();
+    for(const release of (data.releases||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=release.version+" — "+release.status;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent="Revision: "+release.source_revision+" · Artifact: "+release.artifact_sha256.slice(0,16)+"…";
+      const actions=document.createElement("div");actions.className="task-actions";
+      if(release.status==="pending_approval"){
+        const b=document.createElement("button");b.textContent="Approve (owner)";
+        b.addEventListener("click",async()=>{try{await api("/v1/updates/releases/"+encodeURIComponent(release.id)+"/approve",{method:"POST",body:"{}"});await loadReleases()}catch(e){status.textContent=e.message}});
+        actions.append(b);
+      }
+      if(release.status==="approved"){
+        const b=document.createElement("button");b.className="ghost";b.textContent="Record externally deployed";
+        b.addEventListener("click",async()=>{try{await api("/v1/updates/releases/"+encodeURIComponent(release.id)+"/mark-deployed",{method:"POST",body:"{}"});await loadReleases()}catch(e){status.textContent=e.message}});
+        actions.append(b);
+      }
+      card.append(title,meta,actions);list.append(card);
+    }
+    status.textContent=(data.releases||[]).length+" signed release record(s) loaded.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+}
+$("loadUpdatePolicy").addEventListener("click",loadUpdatePolicy);
+$("loadReleases").addEventListener("click",loadReleases);
+$("proposeRelease").addEventListener("click",async()=>{
+  const status=$("updateStatus");
+  try{
+    const body={version:$("releaseVersion").value.trim(),source_revision:$("releaseRevision").value.trim(),artifact_sha256:$("releaseArtifactHash").value.trim(),signature:$("releaseSignature").value.trim()};
+    const result=await api("/v1/updates/proposals",{method:"POST",body:JSON.stringify(body)});
+    $("updateResult").textContent=pretty(result);status.textContent="Signed release verified and submitted for owner approval. No deployment was triggered.";await loadReleases();
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+$("loadRollbackPlan").addEventListener("click",async()=>{
+  const status=$("updateStatus");
+  try{const result=await api("/v1/updates/rollback-plan",{method:"POST",body:"{}"});$("updateResult").textContent=pretty(result);status.textContent="Rollback target loaded. Deployment must be performed externally.";status.classList.remove("error")}
+  catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+async function loadWorkflows(){
+  const status=$("workflowStatus"), list=$("workflowList");
+  try{
+    const data=await api("/v1/assistant/workflows");list.replaceChildren();
+    for(const workflow of (data.workflows||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=workflow.name;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent="Status: "+workflow.status;
+      const pre=document.createElement("pre");pre.textContent=pretty(workflow.steps);
+      const actions=document.createElement("div");actions.className="task-actions";
+      const preview=document.createElement("button");preview.className="ghost";preview.textContent="Preview";
+      preview.addEventListener("click",async()=>{try{const result=await api("/v1/assistant/workflows/"+encodeURIComponent(workflow.id)+"/preview",{method:"POST",body:"{}"});pre.textContent=pretty(result.preview)}catch(e){status.textContent=e.message}});
+      actions.append(preview);
+      if(workflow.status==="draft"){
+        const approve=document.createElement("button");approve.textContent="Approve";
+        approve.addEventListener("click",async()=>{try{await api("/v1/assistant/workflows/"+encodeURIComponent(workflow.id)+"/approve",{method:"POST",body:"{}"});await loadWorkflows()}catch(e){status.textContent=e.message}});
+        actions.append(approve);
+      }
+      if(workflow.status==="approved"){
+        const run=document.createElement("button");run.textContent="Run approved workflow";
+        run.addEventListener("click",async()=>{if(!confirm("Run this approved workflow now?"))return;try{const result=await api("/v1/assistant/workflows/"+encodeURIComponent(workflow.id)+"/run",{method:"POST",body:"{}"});pre.textContent=pretty(result);await loadWorkflows()}catch(e){status.textContent=e.message}});
+        actions.append(run);
+      }
+      const runs=document.createElement("button");runs.className="ghost";runs.textContent="Run history";
+      runs.addEventListener("click",async()=>{try{const result=await api("/v1/assistant/workflows/"+encodeURIComponent(workflow.id)+"/runs");pre.textContent=pretty(result.runs)}catch(e){status.textContent=e.message}});
+      actions.append(runs);card.append(title,meta,pre,actions);list.append(card);
+    }
+    status.textContent=(data.workflows||[]).length+" workflow(s) loaded.";
+  }catch(e){status.textContent=e.message}
+}
+$("saveWorkflow").addEventListener("click",async()=>{
+  const status=$("workflowStatus");
+  try{const name=$("workflowName").value.trim();if(!name)throw new Error("Enter a workflow name.");
+    let steps;try{steps=JSON.parse($("workflowSteps").value)}catch(_){throw new Error("Workflow steps must be valid JSON.")}
+    if(!Array.isArray(steps)||!steps.length)throw new Error("Workflow steps must be a non-empty JSON array.");
+    await api("/v1/assistant/workflows",{method:"POST",body:JSON.stringify({name,steps})});
+    status.textContent="Workflow saved as a draft.";await loadWorkflows();
+  }catch(e){status.textContent=e.message}
+});
+$("refreshWorkflows").addEventListener("click",loadWorkflows);
+async function loadAutomations(){
+  const status=$("automationStatus"), list=$("automationList");
+  try{
+    const caps=await api("/v1/capabilities");
+    const select=$("automationAction");
+    select.replaceChildren();
+    for(const tool of (caps.capabilities||[])){
+      if(tool.status!=="implemented")continue;
+      const option=document.createElement("option"); option.value=tool.name; option.textContent=tool.name+" — "+(tool.description||""); select.append(option);
+    }
+    const data=await api("/v1/automations");
+    list.replaceChildren();
+    for(const item of (data.automations||[])){
+      const card=document.createElement("article"); card.className="task";
+      const title=document.createElement("h4"); title.textContent=item.name+" ("+item.action+")";
+      const meta=document.createElement("p"); meta.className="muted"; meta.textContent="Status: "+item.last_status+" · "+(item.enabled?"enabled":"paused")+" · next run "+item.next_run_at;
+      const pre=document.createElement("pre"); pre.textContent=pretty(item.input);
+      const actions=document.createElement("div"); actions.className="task-actions";
+      const toggle=document.createElement("button"); toggle.className="ghost"; toggle.textContent=item.enabled?"Pause":"Enable";
+      toggle.addEventListener("click",async()=>{try{await api("/v1/automations/"+encodeURIComponent(item.id),{method:"PATCH",body:JSON.stringify({enabled:!item.enabled})});await loadAutomations()}catch(e){status.textContent=e.message}});
+      const history=document.createElement("button"); history.className="ghost"; history.textContent="View runs";
+      history.addEventListener("click",async()=>{try{const runs=await api("/v1/automations/"+encodeURIComponent(item.id)+"/runs");pre.textContent=pretty(runs.runs)}catch(e){status.textContent=e.message}});
+      const remove=document.createElement("button"); remove.className="ghost"; remove.textContent="Delete";
+      remove.addEventListener("click",async()=>{if(!confirm("Delete this automation and its run history?"))return;try{await api("/v1/automations/"+encodeURIComponent(item.id),{method:"DELETE",body:"{}"});await loadAutomations()}catch(e){status.textContent=e.message}});
+      actions.append(toggle,history,remove); card.append(title,meta,pre,actions); list.append(card);
+    }
+    status.textContent=(data.automations||[]).length+" automation(s) loaded.";
+  }catch(e){status.textContent=e.message}
+}
+$("saveAutomation").addEventListener("click",async()=>{
+  const status=$("automationStatus");
+  try{
+    const name=$("automationName").value.trim(), action=$("automationAction").value;
+    const minutes=Number($("automationInterval").value), retries=Number($("automationRetries").value);
+    const local=$("automationNext").value;
+    if(!name||!action||!local)throw new Error("Enter a name, action and first run time.");
+    let args; try{args=JSON.parse($("automationArgs").value||"{}")}catch(_){throw new Error("Action arguments must be valid JSON.")}
+    if(!args||Array.isArray(args)||typeof args!=="object")throw new Error("Action arguments must be a JSON object.");
+    const next=new Date(local); if(!Number.isFinite(next.getTime())||next.getTime()<=Date.now())throw new Error("Choose a future first run time.");
+    await api("/v1/automations",{method:"POST",body:JSON.stringify({name,action,input:args,interval_seconds:Math.round(minutes*60),next_run_at:next.toISOString(),max_retries:retries})});
+    status.textContent="Automation saved."; await loadAutomations();
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+$("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders();await loadWorkflows();await loadDirectTools();await loadPlugins();await loadUpdatePolicy()})();
 </script>
 </body>
 </html>

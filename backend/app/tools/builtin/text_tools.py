@@ -1108,6 +1108,19 @@ def execute_extended(step: dict) -> dict | None:
     if action == "extract_error_lines":
         lines=[line for line in value.splitlines() if re.search(r"(?i)\\b(ERROR|CRITICAL|FATAL|EXCEPTION|TRACEBACK)\\b",line)]
         return {"status":"succeeded","lines":lines[:MAX_ITEMS],"count":len(lines),"truncated":len(lines)>MAX_ITEMS}
+
+    if action == "json_merge_objects":
+        try:
+            left = json.loads(value)
+            right_raw = step.get("second_input", "")
+            right = json.loads(right_raw) if isinstance(right_raw, str) else right_raw
+        except (json.JSONDecodeError, TypeError) as exc:
+            return {"status":"failed","message":"Provide valid JSON in input and second_input."}
+        if not isinstance(left, dict) or not isinstance(right, dict):
+            return {"status":"failed","message":"Both JSON values must be objects."}
+        merged = {**left, **right}
+        rendered = json.dumps(merged, ensure_ascii=False, indent=2)
+        return {"status":"succeeded","json":rendered[:MAX_TEXT],"keys":len(merged),"note":"Shallow merge; values in second_input replace matching first-object keys."}
     return None
 
 

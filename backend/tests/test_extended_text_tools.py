@@ -98,3 +98,10 @@ def test_wrapping_units_and_planner_routing():
     assert run("convert_units", "unused", number=0, from_unit="c", to_unit="f")["result"] == 32
     assert _plan("Convert units", {"number": "2", "from_unit": "kg", "to_unit": "lb"})[0]["action"] == "convert_units"
     assert _plan("Compare these texts", {"text": "one", "second_text": "two"})[0]["action"] == "compare_texts"
+
+
+
+def test_unit_conversion_needs_no_text_input():
+    result = _execute_step({"action": "convert_units", "number": "1", "from_unit": "km", "to_unit": "mi"})
+    assert result["status"] == "succeeded"
+    assert result["result"] == 0.621371

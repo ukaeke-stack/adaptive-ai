@@ -101,7 +101,7 @@ def execute_extended(step: dict) -> dict | None:
         candidates = re.findall(r"https?://[^\s<>\"']+", value, re.I)
         urls = []
         for candidate in candidates:
-            candidate = candidate.rstrip(".,;:!?)\]")
+            candidate = candidate.rstrip(r".,;:!?)\]")
             parsed = urlparse(candidate)
             if parsed.scheme in {"http", "https"} and parsed.hostname and candidate not in urls:
                 urls.append(candidate)
@@ -138,7 +138,7 @@ def execute_extended(step: dict) -> dict | None:
             return {"status": "succeeded", "columns": headers, "row_count": len(rows),
                     "sample_rows": rows[:5], "truncated": len(rows) >= MAX_ROWS}
         def cell(item):
-            return str(item or "").replace("|", "\|").replace("\n", " ")
+            return str(item or "").replace("|", "\\|").replace("\n", " ")
         table = "| " + " | ".join(cell(h) for h in headers) + " |\n"
         table += "| " + " | ".join("---" for _ in headers) + " |\n"
         table += "".join("| " + " | ".join(cell(row.get(h)) for h in headers) + " |\n" for row in rows[:200])

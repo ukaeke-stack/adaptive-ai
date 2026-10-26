@@ -908,7 +908,7 @@ def execute_extra(action, step, value):
         if action=="replace_regex":
             pat=step.get("pattern","")
             if not isinstance(pat,str) or not pat or len(pat)>300:return {"status":"failed","message":"Provide regex pattern up to 300 characters."}
-            try:res=re.sub(pat,str(step.get("replacement","")),value,count=max(0,min(10000,int(step.get("count",0))))))
+            try:res=re.sub(pat,str(step.get("replacement","")),value,count=max(0,min(10000,int(step.get("count",0)))))
             except re.error as exc:return {"status":"failed","message":"Invalid regex: "+str(exc)}
             return {"status":"succeeded","text":res[:MAX_TEXT]}
         if action=="split_by_regex":

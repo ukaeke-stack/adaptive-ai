@@ -526,6 +526,88 @@ def execute_extended(step: dict) -> dict | None:
             shift = len(words)//2
             words = words[shift:] + words[:shift]
         return {"status": "succeeded", "lines": words[:MAX_ITEMS], "note": "Deterministic rotated preview, not a random shuffle."}
+
+    if action == "extract_domains":
+        hosts = re.findall(r"https?://([^/\\s?#]+)", value, re.I)
+        domains = [host.rsplit("@", 1)[-1].split(":")[0].lower() for host in hosts]
+        return {"status": "succeeded", "domains": list(dict.fromkeys(domains))[:MAX_ITEMS]}
+    if action == "extract_file_extensions":
+        extensions = re.findall(r"(?i)(?<![\\w.])\\w+\\.([a-z0-9]{1,12})\\b", value)
+        return {"status": "succeeded", "extensions": list(dict.fromkeys(x.lower() for x in extensions))[:MAX_ITEMS]}
+    if action in {"json_keys", "json_value_types"}:
+        try:
+            obj = json.loads(value)
+        except json.JSONDecodeError as exc:
+            return {"status": "failed", "message": f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        if action == "json_keys":
+            if not isinstance(obj, dict):
+                return {"status": "failed", "message": "JSON root must be an object."}
+            return {"status": "succeeded", "keys": list(obj.keys())[:MAX_ITEMS], "count": len(obj)}
+        members = {str(k): type(v).__name__ for k, v in list(obj.items())[:MAX_ITEMS]} if isinstance(obj, dict) else None
+        return {"status": "succeeded", "root_type": type(obj).__name__, "members": members}
+    if action == "lines_to_json_array":
+        lines = value.splitlines()
+        return {"status": "succeeded", "json": json.dumps(lines, ensure_ascii=False)[:MAX_TEXT], "count": len(lines)}
+    if action == "extract_todo_comments":
+        matches = re.findall(r"(?im)^.*\\b(?:TODO|FIXME|XXX)\\b.*$", value)
+        return {"status": "succeeded", "comments": matches[:MAX_ITEMS], "count": len(matches)}
+    if action == "extract_functions":
+        matches = re.findall(r"(?m)^\\s*(?:async\\s+)?def\\s+(\\w+)\\s*\\(", value)
+        return {"status": "succeeded", "functions": matches[:MAX_ITEMS], "count": len(matches)}
+    if action == "extract_imports":
+        matches = re.findall(r"(?m)^\\s*(?:import\\s+.+|from\\s+.+\\s+import\\s+.+)", value)
+        return {"status": "succeeded", "imports": matches[:MAX_ITEMS], "count": len(matches)}
+    if action == "extract_log_levels":
+        levels = re.findall(r"(?i)\\b(DEBUG|INFO|NOTICE|WARN(?:ING)?|ERROR|CRITICAL|FATAL)\\b", value)
+        return {"status": "succeeded", "levels": list(dict.fromkeys(x.upper() for x in levels)), "counts": dict(Counter(x.upper() for x in levels))}
+    if action in {"numeric_summary", "sum_numbers", "average_numbers", "median_numbers", "min_max_numbers"}:
+        nums = [float(x) for x in re.findall(r"[-+]?(?:\\d+\\.?\\d*|\\.\\d+)", value)]
+        if not nums or any(not math.isfinite(n) for n in nums):
+            return {"status": "failed", "message": "Provide finite numbers in the text."}
+        import statistics
+        if action == "sum_numbers": return {"status": "succeeded", "sum": sum(nums), "count": len(nums)}
+        if action == "average_numbers": return {"status": "succeeded", "average": sum(nums)/len(nums), "count": len(nums)}
+        if action == "median_numbers": return {"status": "succeeded", "median": statistics.median(nums), "count": len(nums)}
+        if action == "min_max_numbers": return {"status": "succeeded", "minimum": min(nums), "maximum": max(nums), "count": len(nums)}
+        return {"status": "succeeded", "count": len(nums), "sum": sum(nums), "average": sum(nums)/len(nums), "median": statistics.median(nums), "minimum": min(nums), "maximum": max(nums)}
+    if action == "percent_change":
+        try:
+            old, new = float(step.get("old_value")), float(step.get("new_value"))
+        except (TypeError, ValueError):
+            return {"status": "failed", "message": "Provide numeric old_value and new_value."}
+        if not math.isfinite(old) or not math.isfinite(new) or old == 0:
+            return {"status": "failed", "message": "Values must be finite and old_value cannot be zero."}
+        return {"status": "succeeded", "percent_change": round((new-old)/abs(old)*100, 6)}
+    if action in {"parse_key_value_lines", "key_value_to_json"}:
+        pairs = {}
+        for line in value.splitlines():
+            if "=" in line:
+                key, val = line.split("=", 1)
+                if key.strip(): pairs[key.strip()] = val.strip()
+        if action == "key_value_to_json":
+            return {"status": "succeeded", "json": json.dumps(pairs, ensure_ascii=False, indent=2)[:MAX_TEXT]}
+        return {"status": "succeeded", "values": dict(list(pairs.items())[:MAX_ITEMS]), "count": len(pairs)}
+    if action == "json_to_key_value":
+        try:
+            obj = json.loads(value)
+        except json.JSONDecodeError as exc:
+            return {"status": "failed", "message": f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        if not isinstance(obj, dict):
+            return {"status": "failed", "message": "JSON root must be an object."}
+        lines = [str(k) + "=" + (json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else str(v)) for k, v in list(obj.items())[:MAX_ITEMS]]
+        return {"status": "succeeded", "text": "\\n".join(lines)[:MAX_TEXT]}
+    if action == "redact_urls":
+        return {"status": "succeeded", "text": re.sub(r"https?://[^\\s<>]+", "[REDACTED_URL]", value, flags=re.I)}
+    if action == "redact_ip_addresses":
+        return {"status": "succeeded", "text": re.sub(r"(?<![\\w.])(?:\\d{1,3}\\.){3}\\d{1,3}(?![\\w.])", "[REDACTED_IP]", value)}
+    if action == "extract_xml_tags":
+        tags = re.findall(r"<([A-Za-z_][\\w:.-]*)\\b[^>]*>", value)
+        return {"status": "succeeded", "tags": list(dict.fromkeys(tags))[:MAX_ITEMS]}
+    if action == "strip_xml_tags":
+        return {"status": "succeeded", "text": re.sub(r"<[^>]*>", " ", value)[:MAX_TEXT], "note": "Simple tag stripping; not a full XML parser."}
+    if action == "extract_sql_tables":
+        tables = re.findall(r"(?i)\\b(?:from|join|into|update|table)\\s+([A-Za-z_][\\w.]*)", value)
+        return {"status": "succeeded", "tables": list(dict.fromkeys(tables))[:MAX_ITEMS]}
     return None
 
 

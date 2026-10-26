@@ -478,7 +478,7 @@ def execute_extra(action, step, value):
             vals=[x for x in lines if re.search(r"(?i)\b(ERROR|CRITICAL|FATAL|EXCEPTION|TRACEBACK)\b",x)]
             return {"status":"succeeded","lines":vals[:MAX_ITEMS],"count":len(vals),"truncated":len(vals)>MAX_ITEMS}
 
-    if action in {"json_flatten","json_deep_merge","json_path_values","json_array_flatten","json_array_reverse","json_array_sort","sort_json_keys","json_pretty_print","json_compact_print","extract_json_objects","markdown_table_to_json","json_to_markdown_list"}:
+    if action in {"json_flatten","json_deep_merge","json_path_values","json_array_flatten","json_array_reverse","json_array_sort","sort_json_keys","json_pretty_print","json_compact_print","markdown_table_to_json","json_to_markdown_list"}:
         try: obj=json.loads(value)
         except json.JSONDecodeError as exc: return {"status":"failed","message":f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
         if action=="json_deep_merge":

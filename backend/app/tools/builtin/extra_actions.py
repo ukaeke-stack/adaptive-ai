@@ -1347,28 +1347,28 @@ def execute_extra(action, step, value):
 
     # Previously declared catalogue actions that lacked concrete dispatch branches.
     if action == "extract_bracketed_text":
-        return {"status": "succeeded", "items": re.findall(r"\\[([^\\[\\]]*)\\]", value)[:MAX_ITEMS]}
+        return {"status": "succeeded", "items": re.findall(r"\[([^\[\]]*)\]", value)[:MAX_ITEMS]}
     if action == "extract_quoted_text":
         items = re.findall(r"""(?:"([^"]*)"|'([^']*)'|“([^”]*)”|‘([^’]*)’)""", value)
         return {"status": "succeeded", "items": [next((part for part in item if part is not None), "") for item in items][:MAX_ITEMS]}
     if action == "extract_emojis":
-        pattern = r"[\\U0001F300-\\U0001FAFF\\U00002600-\\U000027BF]"
+        pattern = r"[\U0001F300-\U0001FAFF\U00002600-\U000027BF]"
         items = re.findall(pattern, value)
         return {"status": "succeeded", "emojis": list(dict.fromkeys(items))[:MAX_ITEMS], "count": len(items)}
     if action == "extract_env_variable_names":
-        items = re.findall(r"(?m)^\\s*(?:export\\s+)?([A-Z_][A-Z0-9_]*)\\s*=", value)
+        items = re.findall(r"(?m)^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=", value)
         return {"status": "succeeded", "variables": list(dict.fromkeys(items))[:MAX_ITEMS]}
     if action == "extract_functions":
-        items = re.findall(r"(?m)^\\s*(?:async\\s+)?function\\s+([A-Za-z_$][\\w$]*)|^\\s*(?:async\\s+)?def\\s+([A-Za-z_]\\w*)|^\\s*(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:async\\s*)?\\(", value)
+        items = re.findall(r"(?m)^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)|^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(", value)
         names = [next((part for part in item if part), "") for item in items]
         return {"status": "succeeded", "functions": list(dict.fromkeys(names))[:MAX_ITEMS], "count": len(names)}
     if action == "extract_ip_addresses":
-        ipv4 = re.findall(r"(?<![\\d.])(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}(?![\\d.])", value)
-        ipv6 = re.findall(r"(?i)(?<![\\w:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\\w:])", value)
+        ipv4 = re.findall(r"(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])", value)
+        ipv6 = re.findall(r"(?i)(?<![\w:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\w:])", value)
         items = list(dict.fromkeys(ipv4 + ipv6))
         return {"status": "succeeded", "addresses": items[:MAX_ITEMS], "count": len(items), "note": "IPv6 results are candidates; full validation is separate."}
     if action == "extract_list_items":
-        items = re.findall(r"(?m)^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)(.+?)\\s*$", value)
+        items = re.findall(r"(?m)^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+?)\s*$", value)
         return {"status": "succeeded", "items": items[:MAX_ITEMS], "count": len(items)}
     if action == "extract_markdown_tables":
         blocks, current = [], []
@@ -1377,16 +1377,16 @@ def execute_extra(action, step, value):
                 current.append(line)
             elif current:
                 if len(current) >= 2:
-                    blocks.append("\\n".join(current))
+                    blocks.append("\n".join(current))
                 current = []
         if len(current) >= 2:
-            blocks.append("\\n".join(current))
+            blocks.append("\n".join(current))
         return {"status": "succeeded", "tables": blocks[:MAX_ITEMS], "count": len(blocks)}
     if action == "find_email_domains":
-        emails = re.findall(r"[A-Z0-9._%+-]+@([A-Z0-9.-]+\\.[A-Z]{2,})", value, re.I)
+        emails = re.findall(r"[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})", value, re.I)
         return {"status": "succeeded", "domains": list(dict.fromkeys(x.lower() for x in emails))[:MAX_ITEMS]}
     if action == "extract_urls_domains":
-        urls = re.findall(r"https?://[^\\s<>\\\"']+", value, re.I)
+        urls = re.findall(r"https?://[^\s<>\\"']+", value, re.I)
         domains = []
         for url in urls:
             try:
@@ -1437,7 +1437,7 @@ def execute_extra(action, step, value):
         if action == "csv_remove_blank_rows":
             kept = [headers] + [row for row in data_rows if any(cell.strip() for cell in row)]
             out = io.StringIO()
-            csv.writer(out, lineterminator="\\n").writerows(kept)
+            csv.writer(out, lineterminator="\n").writerows(kept)
             return {"status": "succeeded", "csv": out.getvalue()[:MAX_TEXT], "removed_rows": len(data_rows) - (len(kept) - 1)}
         column = step.get("column", headers[0] if headers else "")
         if column not in headers:
@@ -1455,11 +1455,11 @@ def execute_extra(action, step, value):
                 continue
         return {"status": "succeeded", "column": column, "row_count": len(values), "non_empty": sum(bool(x.strip()) for x in values), "unique_count": len(set(values)), "numeric_count": len(numeric), "sum": sum(numeric) if numeric else None, "mean": sum(numeric) / len(numeric) if numeric else None}
     if action in {"tsv_to_csv", "csv_to_tsv"}:
-        delimiter_in, delimiter_out = ("\\t", ",") if action == "tsv_to_csv" else (",", "\\t")
+        delimiter_in, delimiter_out = ("\t", ",") if action == "tsv_to_csv" else (",", "\t")
         try:
             rows = list(csv.reader(io.StringIO(value), delimiter=delimiter_in))
             out = io.StringIO()
-            csv.writer(out, delimiter=delimiter_out, lineterminator="\\n").writerows(rows[:MAX_ITEMS])
+            csv.writer(out, delimiter=delimiter_out, lineterminator="\n").writerows(rows[:MAX_ITEMS])
         except csv.Error as exc:
             return {"status": "failed", "message": f"Delimited text parsing failed: {exc}"}
         return {"status": "succeeded", "text": out.getvalue()[:MAX_TEXT], "row_count": len(rows)}
@@ -1475,7 +1475,7 @@ def execute_extra(action, step, value):
             return {"status": "failed", "message": "No Markdown table rows found."}
         width = max(len(row) for row in rows)
         out = io.StringIO()
-        writer = csv.writer(out, lineterminator="\\n")
+        writer = csv.writer(out, lineterminator="\n")
         writer.writerows([row + [""] * (width - len(row)) for row in rows[:MAX_ITEMS]])
         return {"status": "succeeded", "csv": out.getvalue()[:MAX_TEXT], "row_count": len(rows)}
     return None

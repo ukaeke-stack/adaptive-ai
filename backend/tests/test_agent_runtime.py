@@ -35,6 +35,27 @@ def test_agent_calculator_limits_exponent():
         _calculate("2 ** 100")
 
 
+
+def test_agent_extracts_contacts_from_supplied_text():
+    result = _execute_step({"action": "extract_contacts", "input": "Email test@example.com or call +234 801 234 5678"})
+    assert result["status"] == "succeeded"
+    assert "test@example.com" in result["emails"]
+    assert result["phone_numbers"]
+
+
+def test_agent_extracts_dates_from_supplied_text():
+    result = _execute_step({"action": "extract_dates", "input": "Deadline is 2026-11-03 and review is Dec 4, 2026."})
+    assert result["status"] == "succeeded"
+    assert "2026-11-03" in result["dates"]
+    assert "Dec 4, 2026" in result["dates"]
+
+
+def test_agent_summary_labels_its_deterministic_method():
+    result = _execute_step({"action": "summarize_text", "input": "First sentence. Second sentence. Third sentence."})
+    assert result["status"] == "succeeded"
+    assert result["method"] == "extractive sentence selection"
+    assert "First sentence." in result["summary"]
+
 def test_agent_draft_never_sends_message():
     result = _execute_step({"action": "draft_message", "input": "Hello"})
     assert result["status"] == "succeeded"

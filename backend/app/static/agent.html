@@ -168,6 +168,22 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Safe plugin lifecycle</h3>
+  <p class="muted">Propose plugins using only server-allowlisted built-in tools. No uploaded code is executed. Platform-owner approval and activation are separate steps.</p>
+  <div class="field"><label for="pluginName">Plugin name</label><input id="pluginName" maxlength="48" placeholder="Text review assistant"></div>
+  <div class="field"><label for="pluginCapabilities">Capabilities (JSON array; up to 20)</label><textarea id="pluginCapabilities" rows="3" maxlength="6000">["count_characters","extract_emails"]</textarea></div>
+  <div class="actions"><button id="proposePlugin" type="button">Submit plugin proposal</button><button id="refreshPlugins" type="button" class="ghost">Refresh plugins</button></div>
+  <div class="field"><label for="pluginRunId">Plugin ID</label><input id="pluginRunId" maxlength="80" placeholder="Choose a plugin below"></div>
+  <div class="field"><label for="pluginRunCapability">Capability</label><input id="pluginRunCapability" maxlength="80" placeholder="count_characters"></div>
+  <div class="field"><label for="pluginRunInput">Input text</label><textarea id="pluginRunInput" rows="3" maxlength="120000"></textarea></div>
+  <div class="field"><label for="pluginRunArguments">Extra arguments (JSON object)</label><textarea id="pluginRunArguments" rows="3" maxlength="12000">{}</textarea></div>
+  <div class="actions"><button id="runPlugin" type="button">Run plugin capability</button></div>
+  <div class="status" id="pluginStatus" role="status" aria-live="polite">Sign in to manage plugin proposals.</div>
+  <div id="pluginList" class="task-list"></div>
+  <pre id="pluginResult" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#071321;padding:12px;border-radius:10px;max-height:360px;overflow:auto"></pre>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Multi-step workflows</h3>
   <p class="muted">Compose a sequence of supported local steps. Review the saved workflow, approve it, then run it explicitly. Message steps produce drafts only.</p>
   <div class="field"><label for="workflowName">Workflow name</label><input id="workflowName" maxlength="100" placeholder="Prepare meeting materials"></div>
@@ -509,6 +525,56 @@ $("runDirectTool").addEventListener("click",async()=>{
   }catch(e){status.textContent=e.message;status.classList.add("error")}
   finally{$("runDirectTool").disabled=false}
 });
+async function loadPlugins(){
+  const status=$("pluginStatus"),list=$("pluginList");
+  try{
+    const data=await api("/v1/plugin-runtime/plugins");list.replaceChildren();
+    for(const plugin of (data.plugins||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=plugin.name+" — "+plugin.status;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent="ID: "+plugin.id+" · "+plugin.capabilities.join(", ");
+      const actions=document.createElement("div");actions.className="task-actions";
+      const use=document.createElement("button");use.className="ghost";use.textContent="Use plugin";
+      use.addEventListener("click",()=>{$("pluginRunId").value=plugin.id;$("pluginRunCapability").value=plugin.capabilities[0]||""});
+      actions.append(use);
+      if(plugin.status==="pending_review"){
+        const b=document.createElement("button");b.className="ghost";b.textContent="Approve (owner)";
+        b.addEventListener("click",async()=>{try{await api("/v1/plugin-runtime/plugins/"+encodeURIComponent(plugin.id)+"/approve",{method:"POST",body:"{}"});await loadPlugins()}catch(e){status.textContent=e.message}});
+        actions.append(b);
+      }
+      if(plugin.status==="approved"){
+        const b=document.createElement("button");b.textContent="Activate (owner)";
+        b.addEventListener("click",async()=>{try{await api("/v1/plugin-runtime/plugins/"+encodeURIComponent(plugin.id)+"/activate",{method:"POST",body:"{}"});await loadPlugins()}catch(e){status.textContent=e.message}});
+        actions.append(b);
+      }
+      card.append(title,meta,actions);list.append(card);
+    }
+    status.textContent=(data.plugins||[]).length+" plugin proposal(s) loaded.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+}
+$("proposePlugin").addEventListener("click",async()=>{
+  const status=$("pluginStatus");
+  try{
+    const name=$("pluginName").value.trim();let capabilities;
+    try{capabilities=JSON.parse($("pluginCapabilities").value)}catch(_){throw new Error("Capabilities must be a JSON array.")}
+    if(!name)throw new Error("Enter a plugin name.");
+    if(!Array.isArray(capabilities)||!capabilities.length||capabilities.length>20||capabilities.some(x=>typeof x!=="string"))throw new Error("Provide 1–20 capability names.");
+    const result=await api("/v1/plugin-runtime/proposals",{method:"POST",body:JSON.stringify({name,capabilities})});
+    $("pluginRunId").value=result.id;status.textContent="Proposal submitted; it is not executable until approved and activated.";await loadPlugins();
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+$("refreshPlugins").addEventListener("click",loadPlugins);
+$("runPlugin").addEventListener("click",async()=>{
+  const status=$("pluginStatus");
+  try{
+    const id=$("pluginRunId").value.trim(),capability=$("pluginRunCapability").value.trim();
+    if(!id||!capability)throw new Error("Choose a plugin and capability first.");
+    let args;try{args=JSON.parse($("pluginRunArguments").value||"{}")}catch(_){throw new Error("Extra arguments must be valid JSON.")}
+    if(!args||Array.isArray(args)||typeof args!=="object")throw new Error("Extra arguments must be a JSON object.");
+    const result=await api("/v1/plugin-runtime/plugins/"+encodeURIComponent(id)+"/run",{method:"POST",body:JSON.stringify({capability,input:$("pluginRunInput").value,arguments:args})});
+    $("pluginResult").textContent=pretty(result);status.textContent="Built-in plugin capability completed.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
 async function loadWorkflows(){
   const status=$("workflowStatus"), list=$("workflowList");
   try{
@@ -595,7 +661,7 @@ $("saveAutomation").addEventListener("click",async()=>{
 $("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders();await loadWorkflows();await loadDirectTools()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders();await loadWorkflows();await loadDirectTools();await loadPlugins()})();
 </script>
 </body>
 </html>

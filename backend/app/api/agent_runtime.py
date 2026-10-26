@@ -27,7 +27,8 @@ from app.security.sessions import require_user
 router = APIRouter(prefix="/v1/agent", tags=["autonomous agent"])
 
 STATUSES = {"planned", "running", "succeeded", "partially_failed", "failed", "cancelled"}
-SAFE_ACTIONS = {"count_words", "extract_bullets", "draft_message", "calculate", "create_reminder"}
+TEXT_ACTIONS = {"count_words", "extract_bullets", "summarize_text", "extract_contacts", "extract_dates"}
+SAFE_ACTIONS = TEXT_ACTIONS | {"draft_message", "calculate", "create_reminder"}
 
 
 def _now() -> str:
@@ -61,6 +62,12 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
     elif any(term in lower for term in ("extract bullets", "key points", "bullet points")):
         plan.append({"id": "step-1", "action": "extract_bullets", "input": text_value,
                      "requires_context": not bool(text_value), "status": "pending"})
+    elif any(term in lower for term in ("extract contact", "find email address", "find phone number", "extract emails")):
+        plan.append({"id": "step-1", "action": "extract_contacts", "input": text_value, "requires_context": not bool(text_value), "status": "pending"})
+    elif any(term in lower for term in ("extract dates", "find dates", "find deadlines", "list dates")):
+        plan.append({"id": "step-1", "action": "extract_dates", "input": text_value, "requires_context": not bool(text_value), "status": "pending"})
+    elif any(term in lower for term in ("summarize", "summary of", "give me a summary")):
+        plan.append({"id": "step-1", "action": "summarize_text", "input": text_value, "requires_context": not bool(text_value), "status": "pending"})
     elif any(term in lower for term in ("draft a message", "write a message", "draft message", "write an email")):
         plan.append({"id": "step-1", "action": "draft_message", "input": context.get("instructions", goal),
                      "status": "pending", "external_send": False})
@@ -94,7 +101,7 @@ def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
         return None
     system = (
         "You are a task planner for a constrained assistant. Return JSON only, shaped as "
-        '{"steps":[{"action":"count_words|extract_bullets|draft_message|calculate|create_reminder",'
+        '{"steps":[{"action":"count_words|extract_bullets|summarize_text|extract_contacts|extract_dates|draft_message|calculate|create_reminder",'
         '"input":"optional text","expression":"optional arithmetic","title":"optional reminder title",'
         '"due_at":"optional ISO-8601 datetime","notes":"optional reminder notes"}]}. '
         "Use 1 to 5 steps. Only use these exact action names: count_words, extract_bullets, "
@@ -125,7 +132,7 @@ def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
                 return None
             action = item["action"]
             step = {"id": f"step-{index}", "action": action, "status": "pending"}
-            if action in {"count_words", "extract_bullets"}:
+            if action in TEXT_ACTIONS:
                 value = item.get("input", safe_context.get("text", ""))
                 if not isinstance(value, str) or len(value) > 12000:
                     return None
@@ -196,18 +203,29 @@ def _calculate(expression: str) -> float | int:
 
 def _execute_step(step: dict) -> dict:
     action = step.get("action")
-    if action == "count_words":
+    if action in TEXT_ACTIONS:
         value = step.get("input", "")
         if not isinstance(value, str) or not value.strip():
             return {"status": "needs_input", "message": "Add text in the task context before running this step."}
-        return {"status": "succeeded", "word_count": len(re.findall(r"\S+", value)),
-                "character_count": len(value), "paragraph_count": len([x for x in value.splitlines() if x.strip()])}
-    if action == "extract_bullets":
-        value = step.get("input", "")
-        if not isinstance(value, str) or not value.strip():
-            return {"status": "needs_input", "message": "Add text in the task context before running this step."}
-        bullets = [line.strip(" \t-*•") for line in value.splitlines() if line.strip()]
-        return {"status": "succeeded", "bullets": bullets[:100]}
+        if action == "count_words":
+            return {"status": "succeeded", "word_count": len(re.findall(r"\S+", value)),
+                    "character_count": len(value), "paragraph_count": len([x for x in value.splitlines() if x.strip()])}
+        if action == "extract_bullets":
+            bullets = [line.strip(" \t-*•") for line in value.splitlines() if line.strip()]
+            return {"status": "succeeded", "bullets": bullets[:100]}
+        if action == "summarize_text":
+            sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", value.strip())) if s.strip()]
+            return {"status": "succeeded", "summary": " ".join(sentences[:5])[:3000],
+                    "method": "extractive sentence selection", "word_count": len(value.split())}
+        if action == "extract_contacts":
+            emails = sorted(set(re.findall(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", value, re.I)))
+            candidates = re.findall(r"(?<!\w)\+?\d[\d\s().-]{6,}\d(?!\w)", value)
+            phones = sorted(set(" ".join(candidate.split()) for candidate in candidates
+                                if 7 <= sum(ch.isdigit() for ch in candidate) <= 15))
+            return {"status": "succeeded", "emails": emails[:100], "phone_numbers": phones[:100]}
+        if action == "extract_dates":
+            dates = re.findall(r"\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4})\b", value, re.I)
+            return {"status": "succeeded", "dates": list(dict.fromkeys(dates))[:100]}
     if action == "draft_message":
         return {"status": "succeeded", "draft": step.get("input", ""),
                 "sent": False, "message": "Draft prepared only. Nothing was sent."}

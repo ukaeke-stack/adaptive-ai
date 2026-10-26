@@ -685,4 +685,390 @@ def execute_extra(action, step, value):
         except ValueError:return {"status":"failed","message":"Provide ISO start_date and end_date."}
         lo,hi=sorted((a,b));days=sum(1 for i in range((hi-lo).days) if (lo+timedelta(days=i)).weekday()<5)
         return {"status":"succeeded","business_days":days if b>=a else -days}
+
+    if action in {"json_merge_arrays","json_array_filter_contains","json_array_slice","json_object_pick","json_object_omit","json_object_rename_key","json_object_remove_key","json_object_get","json_object_set","json_object_to_pairs","json_pairs_to_object","json_escape_string","json_unescape_string","json_count_nodes","json_max_depth","json_extract_strings","json_extract_numbers","json_extract_booleans","json_extract_nulls","jsonl_to_json","json_to_jsonl","json_flatten","json_deep_merge","json_path_values","json_array_flatten","json_array_reverse","json_array_sort","sort_json_keys","json_pretty_print","json_compact_print"}:
+        if action=="json_escape_string": return {"status":"succeeded","json_string":json.dumps(value,ensure_ascii=False)}
+        if action in {"jsonl_to_json","json_to_jsonl"}:
+            if action=="jsonl_to_json":
+                vals=[]
+                for i,line in enumerate(lines,1):
+                    if line.strip():
+                        try:vals.append(json.loads(line))
+                        except json.JSONDecodeError:return {"status":"failed","message":"Invalid JSON on line "+str(i)}
+                return {"status":"succeeded","json":json.dumps(vals,ensure_ascii=False,indent=2)[:MAX_TEXT]}
+            try:obj=json.loads(value)
+            except json.JSONDecodeError:return {"status":"failed","message":"Invalid JSON."}
+            return {"status":"succeeded","jsonl":"\n".join(json.dumps(x,ensure_ascii=False,separators=(",",":")) for x in (obj if isinstance(obj,list) else [obj])[:MAX_ITEMS])}
+        if action=="json_unescape_string":
+            try:obj=json.loads(value)
+            except json.JSONDecodeError:return {"status":"failed","message":"Input must be a JSON string literal."}
+            return {"status":"succeeded","text":obj} if isinstance(obj,str) else {"status":"failed","message":"JSON value must be a string."}
+        try:obj=json.loads(value)
+        except json.JSONDecodeError as exc:return {"status":"failed","message":f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        if action=="json_deep_merge":
+            raw=step.get("second_input","")
+            try:other=json.loads(raw) if isinstance(raw,str) else raw
+            except json.JSONDecodeError:return {"status":"failed","message":"second_input must be valid JSON."}
+            if not isinstance(obj,dict) or not isinstance(other,dict):return {"status":"failed","message":"Both values must be objects."}
+            def deep_merge(a,b):
+                if isinstance(a,dict) and isinstance(b,dict):
+                    out=dict(a)
+                    for k,v in b.items():out[k]=deep_merge(out[k],v) if k in out else v
+                    return out
+                return b
+            obj=deep_merge(obj,other)
+        if action=="json_merge_arrays":
+            raw=step.get("second_input","")
+            try:other=json.loads(raw) if isinstance(raw,str) else raw
+            except json.JSONDecodeError:return {"status":"failed","message":"second_input must be valid JSON."}
+            if not isinstance(obj,list) or not isinstance(other,list):return {"status":"failed","message":"Both values must be arrays."}
+            return {"status":"succeeded","items":(obj+other)[:MAX_ITEMS],"count":len(obj)+len(other)}
+        if action in {"json_object_pick","json_object_omit","json_object_rename_key","json_object_remove_key","json_object_get","json_object_set","json_object_to_pairs"}:
+            if not isinstance(obj,dict):return {"status":"failed","message":"JSON root must be an object."}
+            key=step.get("key")
+            if action=="json_object_pick":
+                keys=step.get("keys",[]);return {"status":"succeeded","object":{k:obj[k] for k in keys if k in obj}}
+            if action=="json_object_omit":
+                keys=step.get("keys",[]);return {"status":"succeeded","object":{k:v for k,v in obj.items() if k not in keys}}
+            if action=="json_object_rename_key":
+                new=step.get("new_key")
+                if key not in obj or not isinstance(new,str) or not new.strip():return {"status":"failed","message":"Provide existing key and new_key."}
+                obj[new]=obj.pop(key);return {"status":"succeeded","object":obj}
+            if action=="json_object_remove_key":
+                if key not in obj:return {"status":"failed","message":"Key not found."}
+                obj.pop(key);return {"status":"succeeded","object":obj}
+            if action=="json_object_get":
+                if key not in obj:return {"status":"failed","message":"Key not found."}
+                return {"status":"succeeded","value":obj[key]}
+            if action=="json_object_set":obj[key]=step.get("value");return {"status":"succeeded","object":obj}
+            return {"status":"succeeded","pairs":[{"key":k,"value":v} for k,v in list(obj.items())[:MAX_ITEMS]]}
+        if action=="json_pairs_to_object":
+            if not isinstance(obj,list):return {"status":"failed","message":"JSON root must be an array."}
+            return {"status":"succeeded","object":{str(x["key"]):x["value"] for x in obj if isinstance(x,dict) and "key" in x and "value" in x}}
+        if action in {"json_array_filter_contains","json_array_slice","json_array_flatten","json_array_reverse","json_array_sort"}:
+            if not isinstance(obj,list):return {"status":"failed","message":"JSON root must be an array."}
+            if action=="json_array_filter_contains":obj=[x for x in obj if str(step.get("contains","")).casefold() in json.dumps(x,ensure_ascii=False).casefold()]
+            elif action=="json_array_slice":obj=obj[max(0,int(step.get("start",0))):max(0,int(step.get("end",MAX_ITEMS)))]
+            elif action=="json_array_flatten":
+                flat=[]
+                def flat_list(v):
+                    for x in v:flat_list(x) if isinstance(x,list) else flat.append(x)
+                flat_list(obj);obj=flat
+            elif action=="json_array_reverse":obj.reverse()
+            else:obj=sorted(obj,key=lambda x:str(x).casefold(),reverse=bool(step.get("descending",False)))
+            return {"status":"succeeded","items":obj[:MAX_ITEMS],"count":len(obj)}
+        if action=="json_flatten":
+            flat={}
+            def flat_obj(v,p="$"):
+                if isinstance(v,dict):
+                    for k,x in v.items():flat_obj(x,p+"."+str(k))
+                elif isinstance(v,list):
+                    for i,x in enumerate(v):flat_obj(x,p+"["+str(i)+"]")
+                else:flat[p]=v
+            flat_obj(obj);return {"status":"succeeded","values":dict(list(flat.items())[:MAX_ITEMS]),"count":len(flat)}
+        if action=="json_path_values":
+            vals=[]
+            def paths(v,p="$"):
+                vals.append({"path":p,"type":type(v).__name__,"value":v if not isinstance(v,(dict,list)) else None})
+                if isinstance(v,dict):
+                    for k,x in list(v.items())[:MAX_ITEMS]:paths(x,p+"."+str(k))
+                elif isinstance(v,list):
+                    for i,x in enumerate(v[:MAX_ITEMS]):paths(x,p+"["+str(i)+"]")
+            paths(obj);return {"status":"succeeded","paths":vals[:MAX_ITEMS],"count":len(vals)}
+        if action in {"json_count_nodes","json_max_depth","json_extract_strings","json_extract_numbers","json_extract_booleans","json_extract_nulls"}:
+            vals=[];depth=0
+            def visit(v,d=0):
+                nonlocal depth
+                vals.append(v);depth=max(depth,d)
+                if isinstance(v,dict):
+                    for x in v.values():visit(x,d+1)
+                elif isinstance(v,list):
+                    for x in v:visit(x,d+1)
+            visit(obj)
+            if action=="json_count_nodes":return {"status":"succeeded","node_count":len(vals)}
+            if action=="json_max_depth":return {"status":"succeeded","max_depth":depth}
+            typ={"json_extract_strings":str,"json_extract_numbers":(int,float),"json_extract_booleans":bool}.get(action)
+            if action=="json_extract_nulls":out=[x for x in vals if x is None]
+            elif action=="json_extract_numbers":out=[x for x in vals if isinstance(x,typ) and not isinstance(x,bool)]
+            else:out=[x for x in vals if isinstance(x,typ)]
+            return {"status":"succeeded","items":out[:MAX_ITEMS],"count":len(out)}
+        if action=="sort_json_keys":return {"status":"succeeded","json":json.dumps(obj,ensure_ascii=False,indent=2,sort_keys=True)[:MAX_TEXT]}
+        if action=="json_pretty_print":return {"status":"succeeded","json":json.dumps(obj,ensure_ascii=False,indent=2)[:MAX_TEXT]}
+        return {"status":"succeeded","json":json.dumps(obj,ensure_ascii=False,separators=(",",":"))[:MAX_TEXT]}
+    if action in {"csv_column_values","csv_column_count","csv_count_blank_cells","csv_column_trim","csv_column_lowercase","csv_column_uppercase","csv_filter_exact","csv_filter_numeric","csv_fill_blank_cells","csv_rename_columns","csv_drop_columns","csv_append_row","csv_prepend_row","csv_column_to_json","csv_sort_by_numeric","csv_to_xml_preview","csv_column_sum","csv_column_average","csv_column_min_max","csv_transpose","csv_group_count","csv_find_duplicates","csv_remove_duplicates","csv_to_sql_inserts_preview","csv_column_median","csv_column_frequency","csv_validate_email_column","csv_validate_numbers"}:
+        try:rows=list(csv.DictReader(io.StringIO(value)))[:5000]
+        except csv.Error as exc:return {"status":"failed","message":str(exc)}
+        headers=list(rows[0].keys()) if rows else next(csv.reader(io.StringIO(value)),[])
+        if not headers:return {"status":"failed","message":"CSV must have headers."}
+        col=step.get("column")
+        if action=="csv_count_blank_cells":return {"status":"succeeded","blank_cells":sum(not str(v or "").strip() for r in rows for v in r.values())}
+        if action=="csv_rename_columns":
+            mapping=step.get("mapping",{})
+            if not isinstance(mapping,dict) or any(k not in headers or not isinstance(v,str) or not v.strip() for k,v in mapping.items()):return {"status":"failed","message":"mapping must map existing headers to new names."}
+            headers=[mapping.get(h,h) for h in headers];rows=[{mapping.get(k,k):v for k,v in r.items()} for r in rows]
+        elif action=="csv_drop_columns":
+            cols=step.get("columns",[]);headers=[h for h in headers if h not in cols];rows=[{k:v for k,v in r.items() if k in headers} for r in rows]
+        elif action in {"csv_column_values","csv_column_count","csv_column_trim","csv_column_lowercase","csv_column_uppercase","csv_filter_exact","csv_filter_numeric","csv_fill_blank_cells","csv_column_to_json","csv_sort_by_numeric","csv_column_sum","csv_column_average","csv_column_min_max","csv_column_median","csv_group_count","csv_column_frequency","csv_validate_email_column","csv_validate_numbers"}:
+            if col not in headers:return {"status":"failed","message":"Provide an existing column name."}
+            vals=[str(r.get(col,"") or "") for r in rows]
+            if action=="csv_column_values":return {"status":"succeeded","values":vals[:MAX_ITEMS],"count":len(vals)}
+            if action=="csv_column_count":return {"status":"succeeded","count":len(vals),"non_empty":sum(bool(x.strip()) for x in vals)}
+            if action=="csv_column_to_json":return {"status":"succeeded","json":json.dumps(vals,ensure_ascii=False)}
+            if action=="csv_group_count" or action=="csv_column_frequency":return {"status":"succeeded","frequencies":dict(Counter(vals).most_common(MAX_ITEMS))}
+            if action=="csv_validate_email_column":
+                good=[x for x in vals if re.fullmatch(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",x,re.I)]
+                return {"status":"succeeded","valid_count":len(good),"invalid_values":[x for x in vals if x and x not in good][:MAX_ITEMS]}
+            if action=="csv_validate_numbers":
+                good=[]
+                for x in vals:
+                    try:good.append(float(x.replace(",","")))
+                    except ValueError:pass
+                return {"status":"succeeded","valid_count":len(good),"invalid_values":[x for x in vals if x and not re.fullmatch(r"-?\d+(?:\.\d+)?",x.replace(",",""))][:MAX_ITEMS]}
+            if action in {"csv_column_sum","csv_column_average","csv_column_min_max","csv_column_median"}:
+                nums=[]
+                for x in vals:
+                    try:nums.append(float(x.replace(",","")))
+                    except ValueError:pass
+                if not nums:return {"status":"failed","message":"No numeric values in column."}
+                if action=="csv_column_sum":res=sum(nums)
+                elif action=="csv_column_average":res=statistics.mean(nums)
+                elif action=="csv_column_median":res=statistics.median(nums)
+                else:return {"status":"succeeded","min":min(nums),"max":max(nums),"count":len(nums)}
+                return {"status":"succeeded","result":res,"count":len(nums)}
+            if action=="csv_column_trim":
+                for r in rows:r[col]=str(r.get(col,"") or "").strip()
+            elif action=="csv_column_lowercase":
+                for r in rows:r[col]=str(r.get(col,"") or "").lower()
+            elif action=="csv_column_uppercase":
+                for r in rows:r[col]=str(r.get(col,"") or "").upper()
+            elif action=="csv_sort_by_numeric":
+                def num(r):
+                    try:return float(str(r.get(col,"")).replace(",",""))
+                    except ValueError:return float("-inf")
+                rows.sort(key=num,reverse=bool(step.get("descending",False)))
+            elif action=="csv_filter_exact":rows=[r for r in rows if str(r.get(col,""))==str(step.get("equals",""))]
+            elif action=="csv_filter_numeric":
+                try:limit=float(step.get("value",0))
+                except (TypeError,ValueError):return {"status":"failed","message":"value must be numeric."}
+                op=step.get("operator",">=")
+                def match(x):
+                    try:n=float(str(x).replace(",",""))
+                    except ValueError:return False
+                    return {">=":n>=limit,">":n>limit,"<=":n<=limit,"<":n<limit,"==":n==limit}.get(op,False)
+                rows=[r for r in rows if match(r.get(col))]
+            elif action=="csv_fill_blank_cells":
+                fill=str(step.get("fill",""))
+                for r in rows:
+                    if not str(r.get(col,"") or "").strip():r[col]=fill
+        elif action in {"csv_append_row","csv_prepend_row"}:
+            row=step.get("row")
+            if not isinstance(row,dict):return {"status":"failed","message":"row must be an object."}
+            record={h:str(row.get(h,"")) for h in headers}
+            rows=([record]+rows) if action=="csv_prepend_row" else rows+[record]
+        elif action in {"csv_find_duplicates","csv_remove_duplicates"}:
+            seen=set();dups=[];unique=[]
+            for r in rows:
+                k=json.dumps(r,sort_keys=True)
+                if k in seen:dups.append(r)
+                else:seen.add(k);unique.append(r)
+            if action=="csv_find_duplicates":return {"status":"succeeded","duplicates":dups[:MAX_ITEMS],"count":len(dups)}
+            rows=unique
+        elif action=="csv_transpose":
+            matrix=[headers]+[[r.get(h,"") for h in headers] for r in rows];out=io.StringIO();csv.writer(out).writerows(list(map(list,zip(*matrix))))
+            return {"status":"succeeded","csv":out.getvalue()[:MAX_TEXT]}
+        elif action=="csv_to_sql_inserts_preview":
+            table=step.get("table","records")
+            if not isinstance(table,str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*",table):return {"status":"failed","message":"table must be a SQL identifier."}
+            statements=["INSERT INTO "+table+" ("+", ".join(headers)+") VALUES ("+", ".join("NULL" if not r.get(h) else "'"+str(r.get(h)).replace("'","''")+"'" for h in headers)+");" for r in rows[:100]]
+            return {"status":"succeeded","sql_preview":"\n".join(statements)[:MAX_TEXT],"note":"Preview only; SQL is never executed."}
+        elif action=="csv_to_xml_preview":
+            esc=lambda x:html.escape(str(x or ""))
+            xml="<rows>"+"".join("<row>"+"".join("<"+re.sub(r"[^A-Za-z0-9_-]","_",h)+">"+esc(r.get(h,""))+"</"+re.sub(r"[^A-Za-z0-9_-]","_",h)+">" for h in headers)+"</row>" for r in rows[:200])+"</rows>"
+            return {"status":"succeeded","xml_preview":xml[:MAX_TEXT],"rows":len(rows)}
+        out=io.StringIO();writer=csv.DictWriter(out,fieldnames=headers);writer.writeheader();writer.writerows(rows)
+        return {"status":"succeeded","csv":out.getvalue()[:MAX_TEXT],"row_count":len(rows)}
+    if action in {"count_non_ascii","extract_ascii","remove_non_ascii","replace_regex","split_by_regex","join_unique_lines","count_unique_lines","extract_line_numbers","line_length_stats","word_length_stats","extract_capitalized_words","extract_quoted_strings","extract_parenthetical_text","extract_bracket_contents","normalize_quotes","normalize_dashes","normalize_bullets","remove_duplicate_spaces","remove_trailing_spaces","remove_leading_spaces","strip_markdown_links"}:
+        if action=="count_non_ascii":return {"status":"succeeded","count":sum(ord(x)>127 for x in value)}
+        if action in {"extract_ascii","remove_non_ascii"}:return {"status":"succeeded","text":"".join(x for x in value if ord(x)<128)}
+        if action=="replace_regex":
+            pat=step.get("pattern","")
+            if not isinstance(pat,str) or not pat or len(pat)>300:return {"status":"failed","message":"Provide regex pattern up to 300 characters."}
+            try:res=re.sub(pat,str(step.get("replacement","")),value,count=max(0,min(10000,int(step.get("count",0))))
+            except re.error as exc:return {"status":"failed","message":"Invalid regex: "+str(exc)}
+            return {"status":"succeeded","text":res[:MAX_TEXT]}
+        if action=="split_by_regex":
+            pat=step.get("pattern",r"\s+")
+            try:res=re.split(pat,value)
+            except re.error as exc:return {"status":"failed","message":"Invalid regex: "+str(exc)}
+            return {"status":"succeeded","items":res[:MAX_ITEMS],"count":len(res)}
+        if action in {"join_unique_lines","count_unique_lines"}:
+            unique=list(dict.fromkeys(lines))
+            return {"status":"succeeded","unique_line_count":len(unique),"text":str(step.get("separator","\n")).join(unique)[:MAX_TEXT],"total_lines":len(lines)}
+        if action=="extract_line_numbers":
+            pat=step.get("pattern",".")
+            try:vals=[{"line":i,"text":x} for i,x in enumerate(lines,1) if re.search(pat,x)]
+            except re.error as exc:return {"status":"failed","message":"Invalid regex: "+str(exc)}
+            return {"status":"succeeded","lines":vals[:MAX_ITEMS],"count":len(vals)}
+        if action=="line_length_stats":
+            vals=[len(x) for x in lines];return {"status":"succeeded","count":len(vals),"min":min(vals) if vals else 0,"max":max(vals) if vals else 0,"average":sum(vals)/len(vals) if vals else 0}
+        if action=="word_length_stats":
+            vals=[len(x) for x in re.findall(r"\b[\w'-]+\b",value)];return {"status":"succeeded","count":len(vals),"min":min(vals) if vals else 0,"max":max(vals) if vals else 0,"average":sum(vals)/len(vals) if vals else 0}
+        if action=="extract_capitalized_words":vals=re.findall(r"\b[A-Z][a-z]+\b",value)
+        elif action=="extract_quoted_strings":vals=re.findall(r"""["'](.*?)["']""",value)
+        elif action=="extract_parenthetical_text":vals=re.findall(r"\(([^()]*)\)",value)
+        elif action=="extract_bracket_contents":
+            vals=re.findall(r"\[([^\[\]]*)\]|\{([^{}]*)\}|\(([^()]*)\)",value);vals=[next((z for z in x if z),"") for x in vals]
+        elif action=="normalize_quotes":return {"status":"succeeded","text":value.translate(str.maketrans({"“":'"',"”":'"',"‘":"'","’":"'"}))}
+        elif action=="normalize_dashes":return {"status":"succeeded","text":value.translate(str.maketrans({"–":"-","—":"-","−":"-"}))}
+        elif action=="normalize_bullets":return {"status":"succeeded","text":re.sub(r"(?m)^\s*[•●▪]\s*","- ",value)}
+        elif action=="remove_duplicate_spaces":return {"status":"succeeded","text":re.sub(r"[ \t]{2,}"," ",value)}
+        elif action=="remove_trailing_spaces":return {"status":"succeeded","text":re.sub(r"(?m)[ \t]+$","",value)}
+        elif action=="remove_leading_spaces":return {"status":"succeeded","text":re.sub(r"(?m)^[ \t]+","",value)}
+        else:return {"status":"succeeded","text":re.sub(r"\[([^\]]+)\]\([^)]+\)",r"\1",value)}
+        return {"status":"succeeded","items":list(dict.fromkeys(vals))[:MAX_ITEMS]}
+    if action in {"validate_url","validate_domain","validate_phone_candidate","validate_date_iso","validate_datetime_iso","validate_json_lines","validate_csv","validate_xml_wellformed","validate_semver","validate_hex_color","validate_mac","validate_ipv6","validate_port","validate_base64","validate_sha256","validate_slug","validate_credit_card_candidate"}:
+        if action=="validate_url":
+            p=urlparse(value.strip());return {"status":"succeeded","valid":p.scheme in {"http","https"} and bool(p.hostname)}
+        if action=="validate_domain":return {"status":"succeeded","valid":bool(re.fullmatch(r"(?i)(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}",value.strip()))}
+        if action=="validate_phone_candidate":return {"status":"succeeded","valid":bool(re.fullmatch(r"\+?[\d ()-]{7,25}",value.strip())) and sum(x.isdigit() for x in value)>=7}
+        if action=="validate_date_iso":
+            try:datetime.strptime(value.strip(),"%Y-%m-%d");ok=True
+            except ValueError:ok=False
+            return {"status":"succeeded","valid":ok}
+        if action=="validate_datetime_iso":
+            try:datetime.fromisoformat(value.strip().replace("Z","+00:00"));ok=True
+            except ValueError:ok=False
+            return {"status":"succeeded","valid":ok}
+        if action=="validate_json_lines":
+            bad=[]
+            for i,line in enumerate(lines,1):
+                if line.strip():
+                    try:json.loads(line)
+                    except json.JSONDecodeError:bad.append(i)
+            return {"status":"succeeded","valid":not bad,"invalid_line_numbers":bad[:MAX_ITEMS]}
+        if action=="validate_csv":
+            try:rows=list(csv.reader(io.StringIO(value)));widths=[len(r) for r in rows];ok=bool(rows) and len(set(widths))==1
+            except csv.Error:rows=[];widths=[];ok=False
+            return {"status":"succeeded","valid":ok,"rows":len(rows),"column_counts":list(dict.fromkeys(widths))}
+        if action=="validate_xml_wellformed":
+            import xml.etree.ElementTree as ET
+            try:ET.fromstring(value);return {"status":"succeeded","valid":True}
+            except ET.ParseError as exc:return {"status":"succeeded","valid":False,"error":str(exc)}
+        patterns={"validate_semver":r"v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?","validate_hex_color":r"#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})","validate_mac":r"(?i)(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}","validate_sha256":r"(?i)[0-9a-f]{64}","validate_slug":r"[a-z0-9]+(?:-[a-z0-9]+)*","validate_port":r"\d{1,5}","validate_credit_card_candidate":r"(?:\d[ -]?){13,19}"}
+        if action=="validate_ipv6":
+            import ipaddress
+            try:ipaddress.IPv6Address(value.strip());ok=True
+            except ValueError:ok=False
+        elif action=="validate_base64":
+            import base64
+            try:base64.b64decode(value,validate=True);ok=True
+            except Exception:ok=False
+        else:
+            ok=bool(re.fullmatch(patterns.get(action,"(?!)"),value.strip()))
+            if action=="validate_port":ok=ok and 1<=int(value.strip())<=65535
+            if action=="validate_credit_card_candidate":
+                digits=re.sub(r"\D","",value);total=0;parity=len(digits)%2
+                for i,ch in enumerate(digits):
+                    n=int(ch)
+                    if i%2==parity:n*=2;n=n-9 if n>9 else n
+                    total+=n
+                ok=ok and 13<=len(digits)<=19 and total%10==0
+        return {"status":"succeeded","valid":ok}
+    if action in {"calculate_mean","calculate_mode","calculate_variance","calculate_standard_deviation","calculate_range","calculate_ratio","calculate_proportion","calculate_markup","calculate_profit_margin","calculate_compound_growth","calculate_tip","calculate_split_bill","calculate_gcd","calculate_lcm","is_prime","factorize_integer","convert_number_base","binary_to_decimal","decimal_to_binary","roman_to_integer","integer_to_roman"}:
+        nums=[float(x) for x in re.findall(r"(?<![\w.])-?\d+(?:\.\d+)?",value)]
+        if action in {"calculate_gcd","calculate_lcm","is_prime","factorize_integer","convert_number_base","binary_to_decimal","decimal_to_binary","roman_to_integer","integer_to_roman"}:
+            try:n=int(step.get("number",nums[0] if nums else value.strip()))
+            except (ValueError,TypeError):return {"status":"failed","message":"Provide an integer."}
+            if action=="is_prime":return {"status":"succeeded","is_prime":n>=2 and all(n%d for d in range(2,int(n**0.5)+1))}
+            if action=="factorize_integer":
+                if n==0:return {"status":"failed","message":"Zero has no finite prime factorization."}
+                x=abs(n);factors=[];d=2
+                while d*d<=x and len(factors)<10000:
+                    while x%d==0:factors.append(d);x//=d
+                    d+=1
+                if x>1:factors.append(x)
+                return {"status":"succeeded","factors":factors,"negative":n<0}
+            if action in {"binary_to_decimal","decimal_to_binary","convert_number_base"}:
+                try:
+                    if action=="binary_to_decimal":res=int(value.strip(),2)
+                    elif action=="decimal_to_binary":res=bin(n)[2:]
+                    else:
+                        base=int(step.get("base",10))
+                        if not 2<=base<=36:return {"status":"failed","message":"base must be 2–36."}
+                        alphabet="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";x=abs(n);res="0" if x==0 else ""
+                        while x:res=alphabet[x%base]+res;x//=base
+                        if n<0:res="-"+res
+                except ValueError:return {"status":"failed","message":"Invalid base conversion input."}
+                return {"status":"succeeded","result":res}
+            if action=="calculate_gcd":
+                import math
+                b=int(step.get("second_number",nums[1] if len(nums)>1 else 0));return {"status":"succeeded","result":math.gcd(n,b)}
+            if action=="calculate_lcm":
+                import math
+                b=int(step.get("second_number",nums[1] if len(nums)>1 else 0));return {"status":"succeeded","result":abs(n*b)//math.gcd(n,b) if n and b else 0}
+            if action=="integer_to_roman":
+                if not 1<=n<=3999:return {"status":"failed","message":"Roman range is 1–3999."}
+                out=""
+                for v,s in [(1000,"M"),(900,"CM"),(500,"D"),(400,"CD"),(100,"C"),(90,"XC"),(50,"L"),(40,"XL"),(10,"X"),(9,"IX"),(5,"V"),(4,"IV"),(1,"I")]:
+                    while n>=v:out+=s;n-=v
+                return {"status":"succeeded","roman":out}
+            vals={"I":1,"V":5,"X":10,"L":50,"C":100,"D":500,"M":1000};total=0;s=value.strip().upper()
+            for i,ch in enumerate(s):
+                if ch not in vals:return {"status":"failed","message":"Invalid Roman numeral."}
+                total+=-vals[ch] if i+1<len(s) and vals[ch]<vals.get(s[i+1],0) else vals[ch]
+            return {"status":"succeeded","integer":total}
+        if action in {"calculate_ratio","calculate_proportion","calculate_markup","calculate_profit_margin","calculate_compound_growth","calculate_tip","calculate_split_bill"}:
+            a=float(step.get("amount",nums[0] if nums else 0));b=float(step.get("second_amount",nums[1] if len(nums)>1 else 1));rate=float(step.get("rate",nums[1] if len(nums)>1 else 0))/100
+            if action=="calculate_ratio":res=None if b==0 else a/b
+            elif action=="calculate_proportion":res=None if b==0 else a/b*100
+            elif action=="calculate_markup":res=a*(1+rate)
+            elif action=="calculate_profit_margin":res=None if a==0 else (a-b)/a*100
+            elif action=="calculate_compound_growth":res=None if a==0 else ((b/a)**(1/max(1,float(step.get("periods",1))))-1)*100
+            elif action=="calculate_tip":res=a*rate
+            else:res=a/max(1,int(step.get("people",2)))
+            return {"status":"succeeded","result":res}
+        if not nums:return {"status":"failed","message":"Provide numeric values."}
+        if action=="calculate_mean":res=statistics.mean(nums)
+        elif action=="calculate_mode":return {"status":"succeeded","modes":statistics.multimode(nums)}
+        elif action=="calculate_variance":res=statistics.pvariance(nums)
+        elif action=="calculate_standard_deviation":res=statistics.pstdev(nums)
+        else:res=max(nums)-min(nums)
+        return {"status":"succeeded","result":res,"count":len(nums)}
+    if action in {"unix_to_datetime","datetime_to_unix","seconds_to_duration","duration_to_seconds","days_until_date","weekday_for_date","count_weekdays","next_weekday","add_months","iso_week_number","quarter_for_date"}:
+        if action=="unix_to_datetime":
+            try:dt=datetime.fromtimestamp(float(value.strip()),timezone.utc)
+            except (ValueError,OverflowError,OSError):return {"status":"failed","message":"Invalid Unix timestamp."}
+            return {"status":"succeeded","datetime":dt.isoformat()}
+        if action=="datetime_to_unix":
+            try:dt=datetime.fromisoformat(value.strip().replace("Z","+00:00"))
+            except ValueError:return {"status":"failed","message":"Provide ISO datetime."}
+            if dt.tzinfo is None:dt=dt.replace(tzinfo=timezone.utc)
+            return {"status":"succeeded","timestamp":dt.timestamp()}
+        if action=="seconds_to_duration":
+            try:n=max(0,int(value.strip()))
+            except ValueError:return {"status":"failed","message":"Provide seconds as an integer."}
+            d,r=divmod(n,86400);h,r=divmod(r,3600);m,s=divmod(r,60)
+            return {"status":"succeeded","days":d,"hours":h,"minutes":m,"seconds":s,"formatted":f"{d}d {h}h {m}m {s}s"}
+        if action=="duration_to_seconds":
+            total=sum(int(n)*{"d":86400,"h":3600,"m":60,"s":1}[u] for n,u in re.findall(r"(\d+)\s*(d|h|m|s)",value.lower()))
+            return {"status":"succeeded","seconds":total}
+        try:dt=datetime.fromisoformat(str(step.get("date",value)).replace("Z","+00:00"))
+        except ValueError:return {"status":"failed","message":"Provide ISO date."}
+        if action=="days_until_date":return {"status":"succeeded","days":(dt.date()-datetime.now(timezone.utc).date()).days}
+        if action=="weekday_for_date":return {"status":"succeeded","weekday":dt.strftime("%A"),"weekday_number_monday_zero":dt.weekday()}
+        if action=="iso_week_number":return {"status":"succeeded","iso_year":dt.isocalendar().year,"week":dt.isocalendar().week}
+        if action=="quarter_for_date":return {"status":"succeeded","quarter":(dt.month-1)//3+1}
+        if action=="next_weekday":
+            target=int(step.get("weekday",0))
+            if not 0<=target<=6:return {"status":"failed","message":"weekday must be 0–6."}
+            delta=(target-dt.weekday())%7 or 7;return {"status":"succeeded","date":(dt+timedelta(days=delta)).date().isoformat()}
+        if action=="count_weekdays":
+            try:end=datetime.fromisoformat(str(step.get("end_date","")).replace("Z","+00:00")).date()
+            except ValueError:return {"status":"failed","message":"Provide end_date."}
+            start=dt.date();lo,hi=sorted((start,end));n=sum((lo+timedelta(days=i)).weekday()<5 for i in range((hi-lo).days+1))
+            return {"status":"succeeded","weekdays":n if end>=start else -n}
+        if action=="add_months":
+            import calendar
+            idx=dt.year*12+dt.month-1+int(step.get("months",0));year,month0=divmod(idx,12);month=month0+1;day=min(dt.day,calendar.monthrange(year,month)[1])
+            return {"status":"succeeded","date":dt.replace(year=year,month=month,day=day).isoformat()}
     return None

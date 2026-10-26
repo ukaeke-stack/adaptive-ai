@@ -66,8 +66,24 @@ def execute_extended(step: dict) -> dict | None:
     if action not in EXTENDED_ACTIONS:
         return None
 
-    value = "" if action in {"convert_units", "generate_uuid", "generate_timestamp"} else _text(step)
-    if action not in {"convert_units", "generate_uuid", "generate_timestamp"} and not value.strip():
+    ARGUMENT_ONLY_ACTIONS = {
+        "convert_units", "generate_uuid", "generate_timestamp", "calculate_percentage",
+        "calculate_discount", "calculate_tax", "calculate_simple_interest",
+        "calculate_compound_interest", "calculate_loan_payment", "calculate_square_root",
+        "calculate_power", "calculate_logarithm", "calculate_permutation",
+        "calculate_combination", "calculate_compound_rate", "calculate_sales_tax",
+        "calculate_average_speed", "calculate_distance", "calculate_time",
+        "calculate_weighted_average", "calculate_geometric_mean", "calculate_harmonic_mean",
+        "calculate_z_scores", "calculate_percentile", "calculate_factorial",
+        "calculate_fibonacci", "prime_factors", "calculate_gcd", "calculate_lcm",
+        "is_prime", "factorize_integer", "convert_number_base", "days_in_month",
+        "is_leap_year", "add_days", "add_months", "date_difference",
+        "business_days_between", "add_business_days", "format_datetime",
+        "convert_timezone", "age_from_date", "generate_password", "format_duration",
+        "convert_milliseconds_to_duration", "format_currency_preview",
+    }
+    value = "" if action in ARGUMENT_ONLY_ACTIONS else _text(step)
+    if action not in ARGUMENT_ONLY_ACTIONS and not value.strip():
         return {"status": "needs_input", "message": "Add text in the task context before running this step."}
     # Keep the original, reviewed core implementations here. All additional catalog
     # actions are dispatched to the separate bounded executor so they cannot be

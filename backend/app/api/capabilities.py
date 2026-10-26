@@ -23,6 +23,7 @@ _AGENT_DESCRIPTIONS = {
     "draft_message": "Prepare a message draft; never sends it.",
     "calculate": "Evaluate basic arithmetic using a restricted expression parser.",
     "create_reminder": "Save a reminder record; Agent Desk schedules a local Android alarm for future due times when running in the Android app.",
+    "web_search": "Search public web sources through a configured server-side provider; read-only.",
     "count_characters": "Count characters, non-whitespace characters, lines, and words.",
     "estimate_reading_time": "Estimate reading time at 200 words per minute.",
     "word_frequency": "Rank frequent words while excluding a small common-word list.",

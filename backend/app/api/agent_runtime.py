@@ -110,7 +110,8 @@ def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
         "calls, payments, publishing, arbitrary code, browser control, or device control. "
         "If the goal cannot be completed using the allowed actions, return {\"steps\":[]}."
     )
-    safe_context = {str(k)[:40]: str(v)[:4000] for k, v in list(context.items())[:10]}
+    safe_context = {str(k)[:40]: str(v)[:4000] for k, v in list(context.items())[:10] if k != "text"}
+    safe_context["text_available"] = "true" if context.get("text", "").strip() else "false"
     try:
         with httpx.Client(timeout=httpx.Timeout(12.0, connect=5.0)) as client:
             response = client.post(
@@ -134,7 +135,7 @@ def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
             action = item["action"]
             step = {"id": f"step-{index}", "action": action, "status": "pending"}
             if action in TEXT_ACTIONS:
-                value = item.get("input", safe_context.get("text", ""))
+                value = context.get("text", "")
                 if not isinstance(value, str) or len(value) > 12000:
                     return None
                 step["input"] = value

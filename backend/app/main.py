@@ -16,6 +16,7 @@ from app.api.document_ocr import router as document_ocr_router
 from app.api.safe_plugins import router as safe_plugins_router
 from app.api.research import router as research_router
 from app.api.automations import router as automations_router, start_automation_worker, stop_automation_worker
+from app.api.personal_workspace import router as personal_workspace_router
 from app.security.sessions import router as auth_router
 from app.config import get_settings
 from app.security.auth import protect_api_routes
@@ -42,6 +43,7 @@ app.include_router(document_ocr_router)
 app.include_router(safe_plugins_router)
 app.include_router(research_router)
 app.include_router(automations_router)
+app.include_router(personal_workspace_router)
 app.include_router(auth_router)
 
 # Serve the same-origin web interface. API secrets remain server-side.

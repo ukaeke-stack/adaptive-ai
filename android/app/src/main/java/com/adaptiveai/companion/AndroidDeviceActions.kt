@@ -73,6 +73,21 @@ class AndroidDeviceActions(private val context: Context) {
     fun openContacts(): Boolean =
         launch(Intent(Intent.ACTION_VIEW, android.provider.ContactsContract.Contacts.CONTENT_URI),
             "No contacts application is available.")
+    
+    /** Opens Android's contact picker; only the contact selected by the user is returned to Norah. */
+    @JavascriptInterface
+    fun pickContact(): Boolean {
+        val activity = context as? android.app.Activity ?: return false
+        return try {
+            activity.startActivityForResult(
+                Intent(Intent.ACTION_PICK, android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI), 907
+            )
+            true
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "No contact picker is available.", Toast.LENGTH_LONG).show()
+            false
+        }
+    }
 
     /** Opens the system camera UI. Android's camera privacy controls remain in effect. */
     @JavascriptInterface

@@ -25,12 +25,13 @@ from sqlalchemy import text
 from app.memory.store import _ready_engine
 from app.security.sessions import require_user
 from app.tools.builtin.text_tools import execute_extended
+from app.api.research import search_for_agent
 
 router = APIRouter(prefix="/v1/agent", tags=["autonomous agent"])
 
 STATUSES = {"planned", "running", "succeeded", "partially_failed", "failed", "cancelled"}
 TEXT_ACTIONS = {"count_words", "extract_bullets", "summarize_text", "extract_contacts", "extract_dates"}
-SAFE_ACTIONS = TEXT_ACTIONS | {"draft_message", "calculate", "create_reminder"}
+SAFE_ACTIONS = TEXT_ACTIONS | {"draft_message", "calculate", "create_reminder", "web_search"}
 
 
 def _now() -> str:
@@ -83,6 +84,15 @@ def _plan_single(goal: str, context: dict[str, str]) -> list[dict]:
             plan.append({"id": "step-1", "action": "create_reminder", "title": title,
                          "due_at": due_at or None, "notes": context.get("notes", ""),
                          "status": "pending", "device_notification_scheduled": False})
+    elif any(term in lower for term in ("search the web", "web search", "search online", "research", "look up online", "find web sources")):
+        query = context.get("query", "").strip() or goal.strip()
+        try:
+            max_results = int(context.get("max_results", "5"))
+        except (TypeError, ValueError):
+            max_results = 5
+        plan.append({"id": "step-1", "action": "web_search", "query": query[:1000],
+                     "max_results": max(1, min(max_results, 10)), "status": "pending",
+                     "external_side_effect": False})
     # Deterministic local data tools. The executor uses a fixed allowlist and never evals input.
     extended_patterns = [
         (("count characters", "character count", "how many characters"), "count_characters"),
@@ -323,6 +333,16 @@ def _execute_step(step: dict) -> dict:
         if action == "extract_dates":
             dates = re.findall(r"\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4})\b", value, re.I)
             return {"status": "succeeded", "dates": list(dict.fromkeys(dates))[:100]}
+    if action == "web_search":
+        try:
+            query = step.get("query", "")
+            max_results = int(step.get("max_results", 5))
+            result = search_for_agent(query, max_results)
+            return {"status": "succeeded", **result}
+        except HTTPException as exc:
+            return {"status": "failed", "message": exc.detail}
+        except (TypeError, ValueError) as exc:
+            return {"status": "failed", "message": str(exc)}
     if action == "draft_message":
         return {"status": "succeeded", "draft": step.get("input", ""),
                 "sent": False, "message": "Draft prepared only. Nothing was sent."}

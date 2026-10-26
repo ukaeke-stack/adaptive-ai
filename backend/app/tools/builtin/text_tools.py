@@ -20,7 +20,7 @@ EXTENDED_ACTIONS = {
     "extract_urls", "extract_headings", "validate_json", "format_json",
     "summarize_csv", "csv_to_markdown", "replace_text", "hash_text",
     "extract_numbers", "extract_hashtags", "extract_mentions",
-    "reverse_lines", "trim_lines",
+    "reverse_lines", "trim_lines", "normalize_whitespace",
 }
 
 MAX_TEXT = 120_000
@@ -66,6 +66,9 @@ def execute_extended(step: dict) -> dict | None:
         counts = Counter(w.strip("’'-") for w in words if len(w.strip("’'-")) > 1)
         counts = Counter({k: v for k, v in counts.items() if k and k not in STOP_WORDS})
         return {"status": "succeeded", "top_words": [{"word": w, "count": n} for w, n in counts.most_common(50)]}
+    if action == "normalize_whitespace":
+        normalized = re.sub(r"\\s+", " ", value).strip()
+        return {"status": "succeeded", "text": normalized}
     if action in {"deduplicate_lines", "sort_lines", "reverse_lines", "trim_lines"}:
         lines = value.splitlines()
         if action == "deduplicate_lines":

@@ -137,6 +137,9 @@
   <h3>Image tools</h3>
   <p class="muted">Inspect, resize, rotate, convert to grayscale or compress a user-selected image. Image files are processed by the authenticated backend and returned as downloads.</p>
   <div class="field"><label for="imageToolFile">Choose image (up to 10 MB)</label><input id="imageToolFile" type="file" accept="image/png,image/jpeg,image/webp,image/tiff,image/bmp"></div>
+  <input id="photoCapture" type="file" accept="image/*" capture="environment" hidden>
+  <input id="videoCapture" type="file" accept="video/*" capture="environment" hidden>
+  <div class="actions"><button id="takePhotoForTools" type="button" class="ghost">Capture photo</button><button id="recordVideoForTools" type="button" class="ghost">Record video</button></div>
   <div class="row">
     <div class="field"><label for="imageWidth">Resize width (px)</label><input id="imageWidth" type="number" min="1" max="6000" value="1024"></div>
     <div class="field"><label for="imageHeight">Resize height (px)</label><input id="imageHeight" type="number" min="1" max="6000" value="1024"></div>
@@ -416,6 +419,22 @@ $("videoFile").addEventListener("change",()=>{
 $("audioSpeed").addEventListener("change",()=>$("localAudioPlayer").playbackRate=Number($("audioSpeed").value));
 $("audioVolume").addEventListener("input",()=>$("localAudioPlayer").volume=Number($("audioVolume").value)/100);
 $("localAudioPlayer").volume=.8;
+function setFileInputFromCapture(targetId,file){
+  const input=$(targetId),transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;
+}
+$("takePhotoForTools").addEventListener("click",()=>$("photoCapture").click());
+$("recordVideoForTools").addEventListener("click",()=>$("videoCapture").click());
+$("photoCapture").addEventListener("change",()=>{
+  const file=$("photoCapture").files[0];if(!file)return;
+  setFileInputFromCapture("imageToolFile",file);setFileInputFromCapture("imageFile",file);
+  $("imageToolStatus").textContent="Photo captured. Use image tools or OCR on the captured photo.";
+  $("imageOcrStatus").textContent="Photo captured. Tap Extract text from image to run OCR.";
+});
+$("videoCapture").addEventListener("change",()=>{
+  const file=$("videoCapture").files[0];if(!file)return;
+  setFileInputFromCapture("videoFile",file);$("videoFile").dispatchEvent(new Event("change"));
+  $("mediaStatus").textContent="Video captured. Playback is ready.";
+});
 async function runImageTool(action){
   const status=$("imageToolStatus"),file=$("imageToolFile").files[0];
   if(!file){status.textContent="Choose an image first.";return}

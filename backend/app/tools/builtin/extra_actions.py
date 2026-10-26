@@ -529,8 +529,39 @@ def execute_extra(action, step, value):
         if action=="json_compact_print":return {"status":"succeeded","json":json.dumps(obj,ensure_ascii=False,separators=(",",":"))[:MAX_TEXT]}
         if action=="extract_json_objects":
             vals=[]
-            for match in re.finditer(r"\{(?:[^{}]|(?R))*\}",value): vals.append(match.group(0))
-            return {"status":"succeeded","objects":vals[:MAX_ITEMS],"count":len(vals),"note":"Nested object extraction is best-effort and does not use recursive regex features."}
+            # Python's standard re module has no recursive-pattern support. Scan
+            # balanced braces while respecting quoted strings and escapes instead.
+            start=None
+            depth=0
+            in_string=False
+            escaped=False
+            for index,char in enumerate(value):
+                if in_string:
+                    if escaped:
+                        escaped=False
+                    elif char=="\\":
+                        escaped=True
+                    elif char=='"':
+                        in_string=False
+                    continue
+                if char=='"':
+                    in_string=True
+                elif char=="{":
+                    if depth==0:
+                        start=index
+                    depth+=1
+                elif char=="}" and depth:
+                    depth-=1
+                    if depth==0 and start is not None:
+                        candidate=value[start:index+1]
+                        try:
+                            parsed=json.loads(candidate)
+                            if isinstance(parsed,dict):
+                                vals.append(candidate)
+                        except json.JSONDecodeError:
+                            pass
+                        start=None
+            return {"status":"succeeded","objects":vals[:MAX_ITEMS],"count":len(vals),"note":"Extracted balanced JSON objects; surrounding non-JSON text is ignored."}
         if action=="markdown_table_to_json":
             rows=[]
             for line in value.splitlines():

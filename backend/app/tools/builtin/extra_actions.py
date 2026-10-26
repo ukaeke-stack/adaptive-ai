@@ -1005,8 +1005,11 @@ def execute_extra(action, step, value):
     if action in {"calculate_mean","calculate_mode","calculate_variance","calculate_standard_deviation","calculate_range","calculate_ratio","calculate_proportion","calculate_markup","calculate_profit_margin","calculate_compound_growth","calculate_tip","calculate_split_bill","calculate_gcd","calculate_lcm","is_prime","factorize_integer","convert_number_base","binary_to_decimal","decimal_to_binary","roman_to_integer","integer_to_roman"}:
         nums=[float(x) for x in re.findall(r"(?<![\w.])-?\d+(?:\.\d+)?",value)]
         if action in {"calculate_gcd","calculate_lcm","is_prime","factorize_integer","convert_number_base","binary_to_decimal","decimal_to_binary","roman_to_integer","integer_to_roman"}:
-            try:n=int(step.get("number",nums[0] if nums else value.strip()))
-            except (ValueError,TypeError):return {"status":"failed","message":"Provide an integer."}
+            if action=="roman_to_integer":
+                n=0
+            else:
+                try:n=int(step.get("number",nums[0] if nums else value.strip()))
+                except (ValueError,TypeError):return {"status":"failed","message":"Provide an integer."}
             if action=="is_prime":return {"status":"succeeded","is_prime":n>=2 and all(n%d for d in range(2,int(n**0.5)+1))}
             if action=="factorize_integer":
                 if n==0:return {"status":"failed","message":"Zero has no finite prime factorization."}

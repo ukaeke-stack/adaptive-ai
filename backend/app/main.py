@@ -14,6 +14,7 @@ from app.api.updates import router as updates_router
 from app.api.assistant_productivity import router as productivity_router
 from app.api.document_ocr import router as document_ocr_router
 from app.api.safe_plugins import router as safe_plugins_router
+from app.api.research import router as research_router
 from app.security.sessions import router as auth_router
 from app.config import get_settings
 from app.security.auth import protect_api_routes
@@ -38,6 +39,7 @@ app.include_router(updates_router)
 app.include_router(productivity_router)
 app.include_router(document_ocr_router)
 app.include_router(safe_plugins_router)
+app.include_router(research_router)
 app.include_router(auth_router)
 
 # Serve the same-origin web interface. API secrets remain server-side.

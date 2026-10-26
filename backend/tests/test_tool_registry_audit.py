@@ -36,6 +36,19 @@ def test_registry_metadata_only_lists_callable_handlers():
         assert item["status"] == "implemented"
         assert callable(get_tool(item["name"]))
 
+def test_milliseconds_duration_uses_milliseconds_argument():
+    from app.tools.builtin.text_tools import execute_extended
+
+    result = execute_extended({
+        "action": "convert_milliseconds_to_duration",
+        "input": "",
+        "milliseconds": 1500,
+    })
+    assert result["status"] == "succeeded"
+    assert result["seconds"] == 1
+    assert result["formatted"] == "0d 0h 0m 1s"
+
+
 def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors():
     from app.tools.builtin.text_tools import execute_extended
 

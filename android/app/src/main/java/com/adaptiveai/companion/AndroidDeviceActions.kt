@@ -200,4 +200,29 @@ class AndroidDeviceActions(private val context: Context) {
         return launch(intent, "Could not open notification settings.")
     }
 
+    @JavascriptInterface
+    fun openFiles(): Boolean =
+        launch(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
+            "No document picker is available.")
+
+    @JavascriptInterface
+    fun openCalculator(): Boolean {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALCULATOR)
+        return launch(intent, "No calculator application is available.")
+    }
+
+    @JavascriptInterface
+    fun openPhoneDialer(): Boolean =
+        launch(Intent(Intent.ACTION_DIAL), "No phone dialer is available.")
+
+    @JavascriptInterface
+    fun openEmail(): Boolean =
+        launch(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")),
+            "No email application is available.")
+
+    @JavascriptInterface
+    fun openSystemSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_SETTINGS),
+            "Could not open Android settings.")
+
 }

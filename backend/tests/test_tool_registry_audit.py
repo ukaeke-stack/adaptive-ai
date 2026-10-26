@@ -177,3 +177,24 @@ def test_strict_validators_reject_invalid_candidates():
         result = execute_extended({"action": action, "input": value})
         assert result["status"] == "succeeded", (action, result)
         assert result["valid"] is expected, (action, value, result)
+
+
+def test_roman_numeral_parser_rejects_noncanonical_values():
+    from app.tools.builtin.text_tools import execute_extended
+
+    assert execute_extended({"action": "roman_to_integer", "input": "MCMXCIV"})["integer"] == 1994
+    for value in ("IIII", "IC", "VX", "MMMM", ""):
+        result = execute_extended({"action": "roman_to_integer", "input": value})
+        assert result["status"] == "failed", (value, result)
+
+
+def test_duration_parser_rejects_unparsed_garbage_and_duplicate_units():
+    from app.tools.builtin.text_tools import execute_extended
+
+    valid = execute_extended({"action": "duration_to_seconds", "input": "1h 2m 3s"})
+    garbage = execute_extended({"action": "duration_to_seconds", "input": "hello 1h"})
+    duplicate = execute_extended({"action": "duration_to_seconds", "input": "1h 2h"})
+
+    assert valid["seconds"] == 3723
+    assert garbage["status"] == "failed"
+    assert duplicate["status"] == "failed"

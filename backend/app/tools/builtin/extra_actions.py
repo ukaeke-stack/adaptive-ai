@@ -1041,10 +1041,20 @@ def execute_extra(action, step, value):
                     while n>=v:out+=s;n-=v
                 return {"status":"succeeded","roman":out}
             vals={"I":1,"V":5,"X":10,"L":50,"C":100,"D":500,"M":1000};total=0;s=value.strip().upper()
+            if not s or any(ch not in vals for ch in s):
+                return {"status":"failed","message":"Invalid Roman numeral."}
             for i,ch in enumerate(s):
-                if ch not in vals:return {"status":"failed","message":"Invalid Roman numeral."}
-                total+=-vals[ch] if i+1<len(s) and vals[ch]<vals.get(s[i+1],0) else vals[ch]
-            return {"status":"succeeded","integer":total}
+                total+=-vals[ch] if i+1<len(s) and vals[ch]<vals[s[i+1]] else vals[ch]
+            original=total
+            if not 1<=original<=3999:
+                return {"status":"failed","message":"Roman numeral must represent 1–3999."}
+            remainder=original;canonical=""
+            for amount,symbol in [(1000,"M"),(900,"CM"),(500,"D"),(400,"CD"),(100,"C"),(90,"XC"),(50,"L"),(40,"XL"),(10,"X"),(9,"IX"),(5,"V"),(4,"IV"),(1,"I")]:
+                while remainder>=amount:
+                    canonical+=symbol;remainder-=amount
+            if canonical!=s:
+                return {"status":"failed","message":"Invalid or non-canonical Roman numeral."}
+            return {"status":"succeeded","integer":original}
         if action in {"calculate_ratio","calculate_proportion","calculate_markup","calculate_profit_margin","calculate_compound_growth","calculate_tip","calculate_split_bill"}:
             a=float(step.get("amount",nums[0] if nums else 0));b=float(step.get("second_amount",nums[1] if len(nums)>1 else 1));rate=float(step.get("rate",nums[1] if len(nums)>1 else 0))/100
             if action=="calculate_ratio":res=None if b==0 else a/b

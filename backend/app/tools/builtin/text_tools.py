@@ -54,14 +54,14 @@ def execute_extended(step: dict) -> dict | None:
     if action == "count_characters":
         return {"status": "succeeded", "characters_including_spaces": len(value),
                 "characters_excluding_whitespace": sum(not c.isspace() for c in value),
-                "lines": len(value.splitlines()), "words": len(re.findall(r"\\S+", value))}
+                "lines": len(value.splitlines()), "words": len(re.findall(r"\S+", value))}
     if action == "estimate_reading_time":
-        words = len(re.findall(r"\\S+", value))
+        words = len(re.findall(r"\S+", value))
         return {"status": "succeeded", "word_count": words,
                 "estimated_minutes_at_200_wpm": round(words / 200, 2),
                 "note": "Estimate only; actual reading speed varies."}
     if action == "word_frequency":
-        words = re.findall(r"[\\w’'-]+", value.casefold())
+        words = re.findall(r"[\w’'-]+", value.casefold())
         counts = Counter(w.strip("’'-") for w in words if len(w.strip("’'-")) > 1)
         counts = Counter({k: v for k, v in counts.items() if k and k not in STOP_WORDS})
         return {"status": "succeeded", "top_words": [{"word": w, "count": n} for w, n in counts.most_common(50)]}
@@ -94,10 +94,10 @@ def execute_extended(step: dict) -> dict | None:
         normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode().lower()
         return {"status": "succeeded", "slug": re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")[:240]}
     if action == "extract_urls":
-        candidates = re.findall(r"https?://[^\\s<>\\"']+", value, re.I)
+        candidates = re.findall(r"https?://[^\s<>\"']+", value, re.I)
         urls = []
         for candidate in candidates:
-            candidate = candidate.rstrip(".,;:!?)\\]")
+            candidate = candidate.rstrip(".,;:!?)\]")
             parsed = urlparse(candidate)
             if parsed.scheme in {"http", "https"} and parsed.hostname and candidate not in urls:
                 urls.append(candidate)
@@ -105,7 +105,7 @@ def execute_extended(step: dict) -> dict | None:
     if action == "extract_headings":
         headings = []
         for line in value.splitlines():
-            match = re.match(r"^\\s{0,3}(#{1,6})\\s+(.+?)\\s*#*\\s*$", line)
+            match = re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$", line)
             if match:
                 headings.append({"level": len(match.group(1)), "text": match.group(2)})
         return {"status": "succeeded", "headings": headings[:MAX_ITEMS]}
@@ -134,10 +134,10 @@ def execute_extended(step: dict) -> dict | None:
             return {"status": "succeeded", "columns": headers, "row_count": len(rows),
                     "sample_rows": rows[:5], "truncated": len(rows) >= MAX_ROWS}
         def cell(item):
-            return str(item or "").replace("|", "\\|").replace("\\n", " ")
-        table = "| " + " | ".join(cell(h) for h in headers) + " |\\n"
-        table += "| " + " | ".join("---" for _ in headers) + " |\\n"
-        table += "".join("| " + " | ".join(cell(row.get(h)) for h in headers) + " |\\n" for row in rows[:200])
+            return str(item or "").replace("|", "\|").replace("\n", " ")
+        table = "| " + " | ".join(cell(h) for h in headers) + " |\n"
+        table += "| " + " | ".join("---" for _ in headers) + " |\n"
+        table += "".join("| " + " | ".join(cell(row.get(h)) for h in headers) + " |\n" for row in rows[:200])
         return {"status": "succeeded", "markdown_table": table[:MAX_TEXT], "rows_included": min(len(rows), 200)}
     if action == "replace_text":
         find = step.get("find", "")
@@ -155,10 +155,10 @@ def execute_extended(step: dict) -> dict | None:
         digest = hashlib.new(algorithm, value.encode("utf-8")).hexdigest()
         return {"status": "succeeded", "algorithm": algorithm, "digest": digest}
     if action == "extract_numbers":
-        numbers = re.findall(r"(?<![\\w])[-+]?\\d+(?:[.,]\\d+)*(?![\\w])", value)
+        numbers = re.findall(r"(?<![\w])[-+]?\d+(?:[.,]\d+)*(?![\w])", value)
         return {"status": "succeeded", "numbers": list(dict.fromkeys(numbers))[:MAX_ITEMS]}
     if action == "extract_hashtags":
-        return {"status": "succeeded", "hashtags": list(dict.fromkeys(re.findall(r"(?<!\\w)#[\\w]+", value)))[:MAX_ITEMS]}
+        return {"status": "succeeded", "hashtags": list(dict.fromkeys(re.findall(r"(?<!\w)#[\w]+", value)))[:MAX_ITEMS]}
     if action == "extract_mentions":
-        return {"status": "succeeded", "mentions": list(dict.fromkeys(re.findall(r"(?<!\\w)@[A-Za-z0-9_.]{1,64}", value)))[:MAX_ITEMS]}
+        return {"status": "succeeded", "mentions": list(dict.fromkeys(re.findall(r"(?<!\w)@[A-Za-z0-9_.]{1,64}", value)))[:MAX_ITEMS]}
     return None

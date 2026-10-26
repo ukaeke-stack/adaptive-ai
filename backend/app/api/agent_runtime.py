@@ -108,6 +108,19 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
         (("reverse lines", "reverse the line order"), "reverse_lines"),
         (("trim lines", "remove whitespace from lines"), "trim_lines"),
         (("normalize whitespace", "collapse whitespace", "clean extra spaces"), "normalize_whitespace"),
+        (("count lines", "line count", "how many lines"), "count_lines"),
+        (("extract sentences", "list sentences", "split into sentences"), "extract_sentences"),
+        (("redact sensitive data", "redact emails and phones", "mask personal data"), "redact_sensitive_data"),
+        (("strip html", "remove html tags", "extract text from html"), "strip_html"),
+        (("compare these texts", "compare text", "diff these texts"), "compare_texts"),
+        (("split text into chunks", "chunk this text", "split text"), "split_text"),
+        (("encode base64", "base64 encode"), "base64_encode"),
+        (("decode base64", "base64 decode"), "base64_decode"),
+        (("parse this url", "parse url", "url components"), "parse_url"),
+        (("extract markdown links", "list markdown links"), "extract_markdown_links"),
+        (("generate checklist", "turn this into a checklist"), "generate_checklist"),
+        (("wrap text", "wrap lines", "line wrap"), "wrap_text"),
+        (("convert units", "unit conversion", "convert km", "convert kg", "convert celsius", "convert fahrenheit"), "convert_units"),
     ]
     if not plan:
         for phrases, action in extended_patterns:
@@ -121,6 +134,16 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
                     step["replacement"] = context.get("replacement", "")
                 if action == "hash_text":
                     step["algorithm"] = context.get("algorithm", "sha256")
+                if action == "compare_texts":
+                    step["second_input"] = context.get("second_text", "")
+                if action == "split_text":
+                    step["chunk_size"] = context.get("chunk_size", "2000")
+                if action == "wrap_text":
+                    step["width"] = context.get("width", "80")
+                if action == "convert_units":
+                    step["number"] = context.get("number", "")
+                    step["from_unit"] = context.get("from_unit", "")
+                    step["to_unit"] = context.get("to_unit", "")
                 plan.append(step)
                 break
     if not plan:

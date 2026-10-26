@@ -68,3 +68,40 @@ def test_extended_tools_reject_empty_and_oversized_text():
 def test_unknown_extended_action_does_not_claim_success():
     from app.tools.builtin.text_tools import execute_extended
     assert execute_extended({"action": "send_email", "input": "Hello"}) is None
+
+
+
+def test_more_text_tools_and_encoding():
+    assert run("count_lines", "a\n\n b")["line_count"] == 3
+    assert run("extract_sentences", "First. Second!")["sentences"] == ["First.", "Second!"]
+    assert run("redact_sensitive_data", "email me at test@example.com")["text"] == "email me at [REDACTED_EMAIL]"
+    assert run("strip_html", "<p>Hello <b>Norah</b></p>")["text"] == "Hello Norah"
+    encoded = run("base64_encode", "hello")["text"]
+    assert run("base64_decode", encoded)["text"] == "hello"
+    assert run("base64_decode", "%%%")["status"] == "failed"
+
+
+def test_compare_text_chunking_links_and_checklists():
+    comparison = run("compare_texts", "alpha\nbeta", second_input="alpha\ngamma")
+    assert comparison["status"] == "succeeded"
+    assert comparison["similarity_percent"] > 0
+    assert run("split_text", "x" * 250, chunk_size=100)["chunk_count"] == 3
+    assert run("parse_url", "https://example.com/path?a=1")["host"] == "example.com"
+    links = run("extract_markdown_links", "[OpenAI](https://openai.com)")["links"]
+    assert links == [{"text": "OpenAI", "url": "https://openai.com"}]
+    assert "- [ ] buy milk" in run("generate_checklist", "buy milk\ncall mum")["markdown"]
+
+
+def test_wrapping_units_and_planner_routing():
+    assert "\n" in run("wrap_text", "word " * 20, width=20)["text"]
+    assert run("convert_units", "unused", number=1, from_unit="km", to_unit="mi")["result"] == 0.621371
+    assert run("convert_units", "unused", number=0, from_unit="c", to_unit="f")["result"] == 32
+    assert _plan("Convert units", {"number": "2", "from_unit": "kg", "to_unit": "lb"})[0]["action"] == "convert_units"
+    assert _plan("Compare these texts", {"text": "one", "second_text": "two"})[0]["action"] == "compare_texts"
+
+
+
+def test_unit_conversion_needs_no_text_input():
+    result = _execute_step({"action": "convert_units", "number": "1", "from_unit": "km", "to_unit": "mi"})
+    assert result["status"] == "succeeded"
+    assert result["result"] == 0.621371

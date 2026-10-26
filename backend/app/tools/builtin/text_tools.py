@@ -5,14 +5,19 @@ or the device, and they never execute user-provided code.
 """
 from __future__ import annotations
 
+import base64
 import csv
+import difflib
 import hashlib
 import io
+from html.parser import HTMLParser
 import json
+import math
 import re
 import unicodedata
+import textwrap
 from collections import Counter
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 EXTENDED_ACTIONS = {
     "count_characters", "estimate_reading_time", "word_frequency",
@@ -20,7 +25,10 @@ EXTENDED_ACTIONS = {
     "extract_urls", "extract_headings", "validate_json", "format_json",
     "summarize_csv", "csv_to_markdown", "replace_text", "hash_text",
     "extract_numbers", "extract_hashtags", "extract_mentions",
-    "reverse_lines", "trim_lines", "normalize_whitespace",
+    "reverse_lines", "trim_lines", "normalize_whitespace", "count_lines",
+    "extract_sentences", "redact_sensitive_data", "strip_html", "compare_texts",
+    "split_text", "base64_encode", "base64_decode", "parse_url",
+    "extract_markdown_links", "generate_checklist", "wrap_text", "convert_units",
 }
 
 MAX_TEXT = 120_000
@@ -32,6 +40,15 @@ STOP_WORDS = {
     "can", "will", "would", "could", "should", "into", "about", "their",
     "they", "them", "then", "than", "there", "here", "its", "our", "out",
 }
+
+
+class _HTMLTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
 
 
 def _text(step: dict) -> str:
@@ -49,8 +66,8 @@ def execute_extended(step: dict) -> dict | None:
     if action not in EXTENDED_ACTIONS:
         return None
 
-    value = _text(step)
-    if not value.strip():
+    value = "" if action == "convert_units" else _text(step)
+    if action != "convert_units" and not value.strip():
         return {"status": "needs_input", "message": "Add text in the task context before running this step."}
     if action == "count_characters":
         return {"status": "succeeded", "characters_including_spaces": len(value),
@@ -66,6 +83,104 @@ def execute_extended(step: dict) -> dict | None:
         counts = Counter(w.strip("’'-") for w in words if len(w.strip("’'-")) > 1)
         counts = Counter({k: v for k, v in counts.items() if k and k not in STOP_WORDS})
         return {"status": "succeeded", "top_words": [{"word": w, "count": n} for w, n in counts.most_common(50)]}
+    if action == "count_lines":
+        lines = value.splitlines()
+        return {"status": "succeeded", "line_count": len(lines),
+                "non_empty_lines": sum(bool(line.strip()) for line in lines),
+                "blank_lines": sum(not line.strip() for line in lines)}
+    if action == "extract_sentences":
+        sentences = [item.strip() for item in re.split(r"(?<=[.!?])\s+", value.strip()) if item.strip()]
+        return {"status": "succeeded", "sentences": sentences[:MAX_ITEMS], "sentence_count": len(sentences)}
+    if action == "redact_sensitive_data":
+        redacted = re.sub(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[REDACTED_EMAIL]", value, flags=re.I)
+        redacted = re.sub(r"(?<!\w)\+?\d[\d ()-]{7,}\d(?!\w)", "[REDACTED_PHONE]", redacted)
+        redacted = re.sub(r"\b(?:\d[ -]*?){13,19}\b", "[REDACTED_NUMBER]", redacted)
+        return {"status": "succeeded", "text": redacted, "note": "Pattern-based redaction can miss or over-redact data; review before sharing."}
+    if action == "strip_html":
+        parser = _HTMLTextExtractor()
+        parser.feed(value)
+        parser.close()
+        return {"status": "succeeded", "text": re.sub(r"\s+", " ", " ".join(parser.parts)).strip()[:MAX_TEXT]}
+    if action == "compare_texts":
+        other = step.get("second_input", "")
+        if not isinstance(other, str) or not other.strip():
+            return {"status": "needs_input", "message": "Provide second_input to compare both texts."}
+        if len(other) > MAX_TEXT:
+            return {"status": "failed", "message": f"Second text exceeds {MAX_TEXT} characters."}
+        left, right = value.splitlines(), other.splitlines()
+        return {"status": "succeeded", "similarity_percent": round(difflib.SequenceMatcher(None, value, other).ratio() * 100, 2),
+                "only_in_first": [line for line in left if line not in right][:MAX_ITEMS],
+                "only_in_second": [line for line in right if line not in left][:MAX_ITEMS]}
+    if action == "split_text":
+        try:
+            chunk_size = int(step.get("chunk_size", 2000))
+        except (TypeError, ValueError):
+            return {"status": "failed", "message": "chunk_size must be an integer from 100 to 12000."}
+        if not 100 <= chunk_size <= 12000:
+            return {"status": "failed", "message": "chunk_size must be an integer from 100 to 12000."}
+        chunks = [value[i:i + chunk_size] for i in range(0, len(value), chunk_size)]
+        return {"status": "succeeded", "chunks": chunks[:100], "chunk_count": len(chunks), "truncated": len(chunks) > 100}
+    if action == "base64_encode":
+        return {"status": "succeeded", "encoding": "base64", "text": base64.b64encode(value.encode("utf-8")).decode("ascii")}
+    if action == "base64_decode":
+        try:
+            decoded = base64.b64decode(value, validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as exc:
+            return {"status": "failed", "message": "Input must be valid base64 containing UTF-8 text."}
+        return {"status": "succeeded", "text": decoded[:MAX_TEXT], "truncated": len(decoded) > MAX_TEXT}
+    if action == "parse_url":
+        try:
+            parsed = urlparse(value.strip())
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise ValueError("URL must use http:// or https:// and include a host.")
+            port = parsed.port
+        except ValueError as exc:
+            return {"status": "failed", "message": str(exc)}
+        return {"status": "succeeded", "scheme": parsed.scheme, "host": parsed.hostname, "port": port,
+                "path": parsed.path, "query": parse_qs(parsed.query), "fragment": parsed.fragment}
+    if action == "extract_markdown_links":
+        links = [{"text": label.strip(), "url": url.strip()} for label, url in
+                 re.findall(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", value)]
+        return {"status": "succeeded", "links": links[:MAX_ITEMS]}
+    if action == "generate_checklist":
+        items = [line.strip(" -*\t") for line in value.splitlines() if line.strip()]
+        return {"status": "succeeded", "markdown": "\n".join(f"- [ ] {item}" for item in items[:MAX_ITEMS]),
+                "item_count": len(items), "truncated": len(items) > MAX_ITEMS}
+    if action == "wrap_text":
+        try:
+            width = int(step.get("width", 80))
+        except (TypeError, ValueError):
+            return {"status": "failed", "message": "width must be an integer from 20 to 200."}
+        if not 20 <= width <= 200:
+            return {"status": "failed", "message": "width must be an integer from 20 to 200."}
+        return {"status": "succeeded", "text": textwrap.fill(value, width=width)}
+    if action == "convert_units":
+        source, target = step.get("from_unit"), step.get("to_unit")
+        factors = {
+            ("km", "mi"): 0.621371, ("mi", "km"): 1.609344,
+            ("m", "ft"): 3.28084, ("ft", "m"): 0.3048,
+            ("cm", "in"): 0.393701, ("in", "cm"): 2.54,
+            ("kg", "lb"): 2.204623, ("lb", "kg"): 0.45359237,
+            ("g", "oz"): 0.035274, ("oz", "g"): 28.349523125,
+            ("l", "gal_us"): 0.264172, ("gal_us", "l"): 3.785411784,
+        }
+        try:
+            number = float(step.get("number"))
+        except (TypeError, ValueError):
+            return {"status": "failed", "message": "Provide a numeric number plus from_unit and to_unit."}
+        if not math.isfinite(number):
+            return {"status": "failed", "message": "Number must be finite."}
+        if source == "c" and target == "f":
+            result = number * 9 / 5 + 32
+        elif source == "f" and target == "c":
+            result = (number - 32) * 5 / 9
+        elif (source, target) in factors:
+            result = number * factors[(source, target)]
+        elif source == target and source in {"km", "mi", "m", "ft", "cm", "in", "kg", "lb", "g", "oz", "l", "gal_us", "c", "f"}:
+            result = number
+        else:
+            return {"status": "failed", "message": "Unsupported unit pair. Use km/mi, m/ft, cm/in, kg/lb, g/oz, l/gal_us, or c/f."}
+        return {"status": "succeeded", "input": number, "from_unit": source, "to_unit": target, "result": round(result, 8)}
     if action == "normalize_whitespace":
         normalized = re.sub(r"\s+", " ", value).strip()
         return {"status": "succeeded", "text": normalized}

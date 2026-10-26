@@ -477,4 +477,212 @@ def execute_extra(action, step, value):
                 return {"status":"succeeded","counts":dict(Counter(x.upper() for x in vals)),"total_matches":len(vals)}
             vals=[x for x in lines if re.search(r"(?i)\b(ERROR|CRITICAL|FATAL|EXCEPTION|TRACEBACK)\b",x)]
             return {"status":"succeeded","lines":vals[:MAX_ITEMS],"count":len(vals),"truncated":len(vals)>MAX_ITEMS}
+
+    if action in {"json_flatten","json_deep_merge","json_path_values","json_array_flatten","json_array_reverse","json_array_sort","sort_json_keys","json_pretty_print","json_compact_print","extract_json_objects","markdown_table_to_json","json_to_markdown_list"}:
+        try: obj=json.loads(value)
+        except json.JSONDecodeError as exc: return {"status":"failed","message":f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        if action=="json_deep_merge":
+            raw=step.get("second_input","")
+            try: other=json.loads(raw) if isinstance(raw,str) else raw
+            except json.JSONDecodeError:return {"status":"failed","message":"second_input must be valid JSON."}
+            def merge(a,b):
+                if isinstance(a,dict) and isinstance(b,dict):
+                    out=dict(a)
+                    for k,v in b.items():out[k]=merge(out[k],v) if k in out else v
+                    return out
+                return b
+            if not isinstance(obj,dict) or not isinstance(other,dict):return {"status":"failed","message":"Both values must be JSON objects."}
+            obj=merge(obj,other)
+        if action=="json_flatten":
+            flat={}
+            def flatten(v,prefix="$"):
+                if isinstance(v,dict):
+                    for k,x in v.items():flatten(x,prefix+"."+str(k))
+                elif isinstance(v,list):
+                    for i,x in enumerate(v):flatten(x,prefix+"["+str(i)+"]")
+                else:flat[prefix]=v
+            flatten(obj);return {"status":"succeeded","values":dict(list(flat.items())[:MAX_ITEMS]),"count":len(flat)}
+        if action=="json_path_values":
+            paths=[]
+            def paths_walk(v,p="$"):
+                paths.append({"path":p,"type":type(v).__name__,"value":v if not isinstance(v,(dict,list)) else None})
+                if isinstance(v,dict):
+                    for k,x in list(v.items())[:MAX_ITEMS]:paths_walk(x,p+"."+str(k))
+                elif isinstance(v,list):
+                    for i,x in enumerate(v[:MAX_ITEMS]):paths_walk(x,p+"["+str(i)+"]")
+            paths_walk(obj);return {"status":"succeeded","paths":paths[:MAX_ITEMS],"count":len(paths)}
+        if action=="json_array_flatten":
+            if not isinstance(obj,list):return {"status":"failed","message":"JSON root must be an array."}
+            flat=[]
+            def flatten_array(v):
+                for x in v:
+                    flatten_array(x) if isinstance(x,list) else flat.append(x)
+            flatten_array(obj);return {"status":"succeeded","items":flat[:MAX_ITEMS],"count":len(flat)}
+        if action in {"json_array_reverse","json_array_sort","json_array_flatten"}:
+            if not isinstance(obj,list):return {"status":"failed","message":"JSON root must be an array."}
+            if action=="json_array_reverse":obj.reverse()
+            elif action=="json_array_sort":obj=sorted(obj,key=lambda x:str(x).casefold(),reverse=bool(step.get("descending",False)))
+            return {"status":"succeeded","items":obj[:MAX_ITEMS],"count":len(obj)}
+        if action=="sort_json_keys":
+            return {"status":"succeeded","json":json.dumps(obj,ensure_ascii=False,indent=2,sort_keys=True)[:MAX_TEXT]}
+        if action=="json_pretty_print":return {"status":"succeeded","json":json.dumps(obj,ensure_ascii=False,indent=2)[:MAX_TEXT]}
+        if action=="json_compact_print":return {"status":"succeeded","json":json.dumps(obj,ensure_ascii=False,separators=(",",":"))[:MAX_TEXT]}
+        if action=="extract_json_objects":
+            vals=[]
+            for match in re.finditer(r"\{(?:[^{}]|(?R))*\}",value): vals.append(match.group(0))
+            return {"status":"succeeded","objects":vals[:MAX_ITEMS],"count":len(vals),"note":"Nested object extraction is best-effort and does not use recursive regex features."}
+        if action=="markdown_table_to_json":
+            rows=[]
+            for line in value.splitlines():
+                if line.strip().startswith("|") and not re.match(r"^\s*\|?[-:| ]+\|?\s*$",line):
+                    rows.append([x.strip() for x in line.strip().strip("|").split("|")])
+            if len(rows)<2:return {"status":"failed","message":"No Markdown table with header and data rows found."}
+            headers=rows[0];items=[dict(zip(headers,row)) for row in rows[1:] if len(row)==len(headers)]
+            return {"status":"succeeded","json":json.dumps(items[:MAX_ITEMS],ensure_ascii=False,indent=2)[:MAX_TEXT],"rows":len(items)}
+        if action=="json_to_markdown_list":
+            items=obj if isinstance(obj,list) else list(obj.items()) if isinstance(obj,dict) else [obj]
+            return {"status":"succeeded","markdown":"\n".join("- "+json.dumps(x,ensure_ascii=False) for x in items[:MAX_ITEMS])[:MAX_TEXT]}
+    if action in {"csv_to_xml_preview","csv_column_sum","csv_column_average","csv_column_min_max","csv_transpose","csv_group_count","csv_find_duplicates","csv_remove_duplicates","csv_to_sql_inserts_preview","csv_column_median","csv_column_frequency","csv_validate_email_column","csv_validate_numbers"}:
+        try: rows=list(csv.DictReader(io.StringIO(value)))[:5000]
+        except csv.Error as exc:return {"status":"failed","message":str(exc)}
+        headers=list(rows[0].keys()) if rows else next(csv.reader(io.StringIO(value)),[])
+        if not headers:return {"status":"failed","message":"CSV must have a header row."}
+        col=step.get("column")
+        if action in {"csv_column_sum","csv_column_average","csv_column_min_max","csv_column_median","csv_column_frequency","csv_validate_email_column","csv_validate_numbers"}:
+            if col not in headers:return {"status":"failed","message":"Provide an existing column name."}
+            vals=[str(r.get(col,"") or "") for r in rows]
+            if action=="csv_column_frequency":
+                counts=Counter(vals);return {"status":"succeeded","column":col,"frequencies":dict(counts.most_common(MAX_ITEMS))}
+            if action=="csv_validate_email_column":
+                valid=[x for x in vals if re.fullmatch(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",x,re.I)]
+                return {"status":"succeeded","column":col,"valid_count":len(valid),"invalid_values":[x for x in vals if x and x not in valid][:MAX_ITEMS]}
+            if action=="csv_validate_numbers":
+                good=[]
+                for x in vals:
+                    try:good.append(float(x.replace(",","")))
+                    except ValueError:pass
+                return {"status":"succeeded","column":col,"valid_count":len(good),"invalid_values":[x for x in vals if x and not re.fullmatch(r"-?\d+(?:\.\d+)?",x.replace(",",""))][:MAX_ITEMS]}
+            nums=[]
+            for x in vals:
+                try:nums.append(float(x.replace(",","")))
+                except ValueError:pass
+            if not nums:return {"status":"failed","message":"Column contains no numeric values."}
+            if action=="csv_column_sum":result=sum(nums)
+            elif action=="csv_column_average":result=sum(nums)/len(nums)
+            elif action=="csv_column_min_max":return {"status":"succeeded","minimum":min(nums),"maximum":max(nums),"count":len(nums)}
+            elif action=="csv_column_median":result=statistics.median(nums)
+            return {"status":"succeeded","column":col,"result":result,"count":len(nums)}
+        if action=="csv_transpose":
+            matrix=[headers]+[[r.get(h,"") for h in headers] for r in rows]
+            out=io.StringIO();csv.writer(out).writerows(list(map(list,zip(*matrix))) if matrix else [])
+            return {"status":"succeeded","csv":out.getvalue()[:MAX_TEXT]}
+        if action=="csv_group_count":
+            if col not in headers:return {"status":"failed","message":"Provide an existing column name."}
+            return {"status":"succeeded","counts":dict(Counter(str(r.get(col,"")) for r in rows).most_common(MAX_ITEMS))}
+        if action in {"csv_find_duplicates","csv_remove_duplicates"}:
+            seen=set();dups=[];unique=[]
+            for r in rows:
+                key=json.dumps(r,sort_keys=True)
+                if key in seen:dups.append(r)
+                else:seen.add(key);unique.append(r)
+            if action=="csv_find_duplicates":return {"status":"succeeded","duplicates":dups[:MAX_ITEMS],"count":len(dups)}
+            rows=unique
+        if action=="csv_to_sql_inserts_preview":
+            table=step.get("table","records")
+            if not isinstance(table,str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*",table):return {"status":"failed","message":"table must be a simple SQL identifier."}
+            def sqlq(x):return "NULL" if x is None or x=="" else "'"+str(x).replace("'","''")+"'"
+            statements=["INSERT INTO "+table+" ("+", ".join(headers)+") VALUES ("+", ".join(sqlq(r.get(h,"")) for h in headers)+");" for r in rows[:100]]
+            return {"status":"succeeded","sql_preview":"\n".join(statements)[:MAX_TEXT],"count":len(statements),"note":"Preview only; SQL is not executed."}
+        if action=="csv_to_xml_preview":
+            esc=lambda x:html.escape(str(x or ""))
+            xml="<rows>"+"".join("<row>"+"".join("<"+re.sub(r"[^A-Za-z0-9_-]","_",h)+">"+esc(r.get(h,""))+"</"+re.sub(r"[^A-Za-z0-9_-]","_",h)+">" for h in headers)+"</row>" for r in rows[:200])+"</rows>"
+            return {"status":"succeeded","xml_preview":xml[:MAX_TEXT],"rows":len(rows)}
+    if action in {"count_word_lengths","word_length_histogram","sentence_case","title_case","camel_case","pascal_case","snake_case","kebab_case","extract_lines_unique","compare_lists","extract_semver","extract_uuids","extract_hex_numbers","extract_markdown_headings","extract_html_title","extract_html_meta","extract_html_links_text","extract_python_classes","extract_python_imports","extract_javascript_functions"}:
+        if action=="count_word_lengths" or action=="word_length_histogram":
+            counts=Counter(len(x) for x in re.findall(r"\b[\w'-]+\b",value))
+            return {"status":"succeeded","histogram":dict(sorted(counts.items())),"word_count":sum(counts.values())}
+        if action in {"sentence_case","title_case","camel_case","pascal_case","snake_case","kebab_case"}:
+            words=re.findall(r"[A-Za-z0-9]+",value)
+            if action=="sentence_case":result=value[:1].upper()+value[1:].lower()
+            elif action=="title_case":result=" ".join(x[:1].upper()+x[1:].lower() for x in words)
+            elif action=="camel_case":result="".join([words[0].lower()]+[x.title() for x in words[1:]]) if words else ""
+            elif action=="pascal_case":result="".join(x.title() for x in words)
+            elif action=="snake_case":result="_".join(x.lower() for x in words)
+            else:result="-".join(x.lower() for x in words)
+            return {"status":"succeeded","text":result}
+        if action=="extract_lines_unique":
+            unique=list(dict.fromkeys(lines));return {"status":"succeeded","lines":unique[:MAX_ITEMS],"count":len(unique)}
+        if action=="compare_lists":
+            other=step.get("second_input","")
+            if not isinstance(other,str):return {"status":"failed","message":"second_input must be text."}
+            left=set(x.strip() for x in value.splitlines() if x.strip());right=set(x.strip() for x in other.splitlines() if x.strip())
+            return {"status":"succeeded","common":sorted(left&right)[:MAX_ITEMS],"only_first":sorted(left-right)[:MAX_ITEMS],"only_second":sorted(right-left)[:MAX_ITEMS]}
+        if action in {"extract_semver","extract_uuids","extract_hex_numbers"}:
+            pat={"extract_semver":r"(?<![\w])v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?","extract_uuids":r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b","extract_hex_numbers":r"(?i)\b0x[0-9a-f]+\b"}[action]
+            vals=list(dict.fromkeys(re.findall(pat,value)));return {"status":"succeeded","items":vals[:MAX_ITEMS],"count":len(vals)}
+        if action=="extract_markdown_headings":
+            vals=[{"level":len(a),"text":b.strip()} for a,b in re.findall(r"(?m)^(#{1,6})\s+(.+)$",value)]
+            return {"status":"succeeded","headings":vals[:MAX_ITEMS]}
+        if action=="extract_html_title":
+            m=re.search(r"(?is)<title\b[^>]*>(.*?)</title\s*>",value)
+            return {"status":"succeeded","title":re.sub(r"<[^>]*>","",m.group(1)).strip() if m else ""}
+        if action=="extract_html_meta":
+            vals=re.findall(r"""(?is)<meta\b[^>]*(?:name|property)=["']([^"']+)["'][^>]*content=["']([^"']*)["'][^>]*>""",value)
+            return {"status":"succeeded","metadata":[{"name":a,"content":b} for a,b in vals[:MAX_ITEMS]]}
+        if action=="extract_html_links_text":
+            vals=re.findall(r"(?is)<a\b[^>]*href=['\"]([^'\"]+)['\"][^>]*>(.*?)</a>",value)
+            return {"status":"succeeded","links":[{"url":a,"text":re.sub(r"<[^>]*>","",b).strip()} for a,b in vals[:MAX_ITEMS]]}
+        if action in {"extract_python_classes","extract_python_imports"}:
+            pat=r"(?m)^\s*class\s+([A-Za-z_]\w*)" if action=="extract_python_classes" else r"(?m)^\s*(?:from\s+\S+\s+import\s+.+|import\s+.+)"
+            return {"status":"succeeded","items":re.findall(pat,value)[:MAX_ITEMS]}
+        vals=re.findall(r"\bfunction\s+([A-Za-z_$][\w$]*)\s*\(|(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(",value)
+        return {"status":"succeeded","functions":[next((x for x in pair if x),"") for pair in vals[:MAX_ITEMS]]}
+    if action in {"normalize_unicode_nfc","normalize_unicode_nfkc"}:
+        form="NFC" if action=="normalize_unicode_nfc" else "NFKC"
+        return {"status":"succeeded","text":unicodedata.normalize(form,value)}
+    if action=="mask_custom_pattern":
+        pattern=step.get("pattern","")
+        if not isinstance(pattern,str) or not pattern or len(pattern)>300:return {"status":"failed","message":"Provide a non-empty regex pattern up to 300 characters."}
+        try:rx=re.compile(pattern)
+        except re.error as exc:return {"status":"failed","message":"Invalid regex: "+str(exc)}
+        return {"status":"succeeded","text":rx.sub(str(step.get("replacement","[REDACTED]")),value)[:MAX_TEXT]}
+    if action in {"business_days_between","add_business_days","is_leap_year","days_in_month","age_from_date","format_datetime","convert_timezone"}:
+        from calendar import isleap, monthrange
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        if action=="is_leap_year":
+            try:y=int(step.get("year",value.strip()))
+            except ValueError:return {"status":"failed","message":"Provide a year."}
+            return {"status":"succeeded","year":y,"is_leap_year":isleap(y)}
+        if action=="days_in_month":
+            try:y=int(step.get("year"));m=int(step.get("month"))
+            except (TypeError,ValueError):return {"status":"failed","message":"Provide year and month."}
+            if not 1<=m<=12:return {"status":"failed","message":"month must be 1–12."}
+            return {"status":"succeeded","days":monthrange(y,m)[1]}
+        if action=="age_from_date":
+            try:birth=datetime.fromisoformat(str(step.get("birth_date",value)).replace("Z","+00:00")).date()
+            except ValueError:return {"status":"failed","message":"Provide birth_date in ISO format."}
+            today=datetime.now(timezone.utc).date();return {"status":"succeeded","years":today.year-birth.year-((today.month,today.day)<(birth.month,birth.day))}
+        if action=="format_datetime":
+            try:dt=datetime.fromisoformat(str(step.get("datetime",value)).replace("Z","+00:00"))
+            except ValueError:return {"status":"failed","message":"Provide ISO datetime."}
+            fmt=step.get("format","%Y-%m-%d %H:%M:%S")
+            if not isinstance(fmt,str) or len(fmt)>100:return {"status":"failed","message":"Invalid format string."}
+            return {"status":"succeeded","formatted":dt.strftime(fmt)}
+        if action=="convert_timezone":
+            try:dt=datetime.fromisoformat(str(step.get("datetime",value)).replace("Z","+00:00"));zone=ZoneInfo(str(step.get("timezone","UTC")))
+            except (ValueError,ZoneInfoNotFoundError):return {"status":"failed","message":"Provide ISO datetime and valid IANA timezone."}
+            if dt.tzinfo is None:dt=dt.replace(tzinfo=timezone.utc)
+            return {"status":"succeeded","datetime":dt.astimezone(zone).isoformat(),"timezone":str(zone)}
+        if action=="add_business_days":
+            try:dt=datetime.fromisoformat(str(step.get("date",value)).replace("Z","+00:00"));n=int(step.get("days",0))
+            except (ValueError,TypeError):return {"status":"failed","message":"Provide date and integer days."}
+            direction=1 if n>=0 else -1
+            for _ in range(min(abs(n),10000)):
+                dt+=timedelta(days=direction)
+                if dt.weekday()<5: n-=direction
+            return {"status":"succeeded","date":dt.date().isoformat()}
+        try:a=datetime.fromisoformat(str(step.get("start_date","")).replace("Z","+00:00")).date();b=datetime.fromisoformat(str(step.get("end_date","")).replace("Z","+00:00")).date()
+        except ValueError:return {"status":"failed","message":"Provide ISO start_date and end_date."}
+        lo,hi=sorted((a,b));days=sum(1 for i in range((hi-lo).days) if (lo+timedelta(days=i)).weekday()<5)
+        return {"status":"succeeded","business_days":days if b>=a else -days}
     return None

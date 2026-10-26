@@ -67,7 +67,7 @@ def execute_extended(step: dict) -> dict | None:
         counts = Counter({k: v for k, v in counts.items() if k and k not in STOP_WORDS})
         return {"status": "succeeded", "top_words": [{"word": w, "count": n} for w, n in counts.most_common(50)]}
     if action == "normalize_whitespace":
-        normalized = re.sub(r"\\s+", " ", value).strip()
+        normalized = re.sub(r"\s+", " ", value).strip()
         return {"status": "succeeded", "text": normalized}
     if action in {"deduplicate_lines", "sort_lines", "reverse_lines", "trim_lines"}:
         lines = value.splitlines()

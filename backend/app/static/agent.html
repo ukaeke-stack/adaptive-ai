@@ -120,6 +120,26 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Image tools</h3>
+  <p class="muted">Inspect, resize, rotate, convert to grayscale or compress a user-selected image. Image files are processed by the authenticated backend and returned as downloads.</p>
+  <div class="field"><label for="imageToolFile">Choose image (up to 10 MB)</label><input id="imageToolFile" type="file" accept="image/png,image/jpeg,image/webp,image/tiff,image/bmp"></div>
+  <div class="row">
+    <div class="field"><label for="imageWidth">Resize width (px)</label><input id="imageWidth" type="number" min="1" max="6000" value="1024"></div>
+    <div class="field"><label for="imageHeight">Resize height (px)</label><input id="imageHeight" type="number" min="1" max="6000" value="1024"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="imageRotate">Rotate</label><select id="imageRotate"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option><option value="-90">90° counter-clockwise</option></select></div>
+    <div class="field"><label for="imageQuality">Compression quality (20–95)</label><input id="imageQuality" type="number" min="20" max="95" value="80"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="imageFormat">Output format</label><select id="imageFormat"><option value="JPEG">JPEG</option><option value="WEBP">WEBP</option><option value="PNG">PNG</option></select></div>
+    <div class="field"><label for="imageFit">Resize behavior</label><select id="imageFit"><option value="true">Preserve aspect ratio</option><option value="false">Exact dimensions</option></select></div>
+  </div>
+  <div class="actions"><button data-image-tool="inspect" type="button" class="ghost">Inspect image</button><button data-image-tool="resize" type="button">Resize and download</button><button data-image-tool="rotate" type="button" class="ghost">Rotate and download</button><button data-image-tool="grayscale" type="button" class="ghost">Grayscale download</button><button data-image-tool="compress" type="button" class="ghost">Compress and download</button></div>
+  <div class="status" id="imageToolStatus" role="status" aria-live="polite">Choose an image to begin.</div>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Direct tool execution</h3>
   <p class="muted">Run an individual registered tool against explicit JSON arguments. This uses the server allowlist; unsupported actions are not executed.</p>
   <div class="field"><label for="directToolName">Registered tool</label><select id="directToolName"><option value="">Loading tools…</option></select></div>
@@ -366,6 +386,37 @@ async function loadSocial(){
   }catch(e){status.textContent=e.message}
 }
 $("refreshSocial").addEventListener("click",loadSocial);
+async function runImageTool(action){
+  const status=$("imageToolStatus"),file=$("imageToolFile").files[0];
+  if(!file){status.textContent="Choose an image first.";return}
+  if(file.size>10*1024*1024){status.textContent="Image must be 10 MB or smaller.";return}
+  const button=document.querySelector('[data-image-tool="'+action+'"]');if(button)button.disabled=true;
+  status.textContent="Processing image…";
+  try{
+    if(action==="inspect"){
+      const form=new FormData();form.append("file",file);
+      const response=await fetch("/v1/assistant/images/inspect",{method:"POST",credentials:"same-origin",body:form});
+      const data=await response.json().catch(()=>({detail:"Unreadable server response"}));
+      if(!response.ok)throw new Error(data.detail||"Image inspection failed.");
+      status.textContent=pretty(data);return;
+    }
+    const form=new FormData();form.append("file",file);
+    let url="/v1/assistant/images/"+action;
+    const params=new URLSearchParams();
+    if(action==="resize"){params.set("width",$("imageWidth").value);params.set("height",$("imageHeight").value);params.set("fit",$("imageFit").value)}
+    if(action==="rotate")params.set("degrees",$("imageRotate").value);
+    if(action==="compress"){params.set("quality",$("imageQuality").value);params.set("output_format",$("imageFormat").value)}
+    if(params.toString())url+="?"+params.toString();
+    const response=await fetch(url,{method:"POST",credentials:"same-origin",body:form});
+    if(!response.ok){const data=await response.json().catch(()=>({detail:"Image processing failed."}));throw new Error(data.detail||"Image processing failed.")}
+    const blob=await response.blob(),objectUrl=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=objectUrl;link.download="norah-"+action+"."+(blob.type.includes("jpeg")?"jpg":blob.type.includes("webp")?"webp":"png");
+    document.body.append(link);link.click();link.remove();URL.revokeObjectURL(objectUrl);
+    status.textContent="Image processed and download requested.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+  finally{if(button)button.disabled=false}
+}
+document.querySelectorAll("[data-image-tool]").forEach(button=>button.addEventListener("click",()=>runImageTool(button.dataset.imageTool)));
 async function loadDirectTools(){
   const select=$("directToolName"),status=$("directToolStatus");
   try{

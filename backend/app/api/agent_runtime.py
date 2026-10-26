@@ -154,21 +154,26 @@ def _plan_single(goal: str, context: dict[str, str]) -> list[dict]:
 
 
 def _plan(goal: str, context: dict[str, str]) -> list[dict]:
-    """Build a transparent multi-step plan when every subgoal maps to a safe tool."""
+    """Build a transparent multi-step plan only when every subgoal is supported."""
     segments = [part.strip() for part in re.split(r"\s+(?:and then|then|and)\s+", goal, flags=re.I) if part.strip()]
-    if 1 < len(segments) <= 5:
-        combined = []
-        for segment in segments:
-            candidate = _plan_single(segment, context)
-            if not candidate or any(step.get("action") == "unsupported_goal" for step in candidate):
-                combined = []
-                break
-            combined.extend(candidate)
-        if combined and len(combined) <= 5:
-            for index, step in enumerate(combined, start=1):
-                step["id"] = f"step-{index}"
-            return combined
-    return _plan_single(goal, context)
+    if len(segments) == 1:
+        return _plan_single(goal, context)
+    if len(segments) > 5:
+        return [{"id": "step-1", "action": "unsupported_goal", "status": "blocked",
+                 "reason": "Multi-step plans are limited to five supported actions. No action was executed."}]
+    combined = []
+    for segment in segments:
+        candidate = _plan_single(segment, context)
+        if not candidate or any(step.get("action") == "unsupported_goal" for step in candidate):
+            return [{"id": "step-1", "action": "unsupported_goal", "status": "blocked",
+                     "reason": "At least one subgoal requires an unavailable integration. No partial plan was created."}]
+        combined.extend(candidate)
+    if len(combined) > 5:
+        return [{"id": "step-1", "action": "unsupported_goal", "status": "blocked",
+                 "reason": "Multi-step plans are limited to five supported actions. No action was executed."}]
+    for index, step in enumerate(combined, start=1):
+        step["id"] = f"step-{index}"
+    return combined
 
 def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
     """Ask the configured model to plan only among the registered safe actions.

@@ -22,7 +22,7 @@ _AGENT_DESCRIPTIONS = {
     "extract_dates": "Extract date strings from supplied text.",
     "draft_message": "Prepare a message draft; never sends it.",
     "calculate": "Evaluate basic arithmetic using a restricted expression parser.",
-    "create_reminder": "Save an in-app reminder record; device notification scheduling is not included.",
+    "create_reminder": "Save a reminder record; Agent Desk schedules a local Android alarm for future due times when running in the Android app.",
     "count_characters": "Count characters, non-whitespace characters, lines, and words.",
     "estimate_reading_time": "Estimate reading time at 200 words per minute.",
     "word_frequency": "Rank frequent words while excluding a small common-word list.",

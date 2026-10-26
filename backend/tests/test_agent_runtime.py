@@ -83,6 +83,8 @@ def test_agent_workspace_is_served():
     assert "Norah Agent Desk" in response.text
     assert 'id="extractPdf"' in response.text
     assert 'id="ocrPdf"' in response.text
+    assert "scheduleReminder" in response.text
+    assert "Local Android reminder notification scheduled" in response.text
 
 
 

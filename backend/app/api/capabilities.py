@@ -44,6 +44,19 @@ _AGENT_DESCRIPTIONS = {
     "reverse_lines": "Reverse the order of supplied lines.",
     "trim_lines": "Trim leading and trailing whitespace from each line.",
     "normalize_whitespace": "Collapse repeated whitespace into single spaces.",
+    "count_lines": "Count total, non-empty, and blank lines.",
+    "extract_sentences": "Split supplied text into sentence candidates.",
+    "redact_sensitive_data": "Pattern-redact email addresses, phone candidates, and long number sequences.",
+    "strip_html": "Extract visible text from HTML markup without fetching remote content.",
+    "compare_texts": "Compare two supplied texts using similarity and line differences.",
+    "split_text": "Split supplied text into bounded character-size chunks.",
+    "base64_encode": "Encode supplied UTF-8 text as Base64.",
+    "base64_decode": "Decode validated Base64 containing UTF-8 text.",
+    "parse_url": "Parse an HTTP/HTTPS URL into components without visiting it.",
+    "extract_markdown_links": "Extract links written in Markdown link syntax.",
+    "generate_checklist": "Turn non-empty lines into Markdown checklist items.",
+    "wrap_text": "Wrap text to a bounded line width.",
+    "convert_units": "Convert supported common length, weight, volume, and temperature units.",
 }
 
 

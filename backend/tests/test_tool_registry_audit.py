@@ -35,3 +35,47 @@ def test_registry_metadata_only_lists_callable_handlers():
     for item in items:
         assert item["status"] == "implemented"
         assert callable(get_tool(item["name"]))
+
+def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors():
+    from app.tools.builtin.text_tools import execute_extended
+
+    common_arguments = {
+        "input": "Sample text 42, https://example.com and test@example.com",
+        "second_input": "Other sample text 43",
+        "number": 2,
+        "amount": 100,
+        "rate": 5,
+        "years": 2,
+        "months": 12,
+        "from_unit": "km",
+        "to_unit": "mi",
+        "mode": "lower",
+        "algorithm": "sha256",
+        "pattern": "sample",
+        "width": 80,
+        "chunk_size": 100,
+        "limit": 10,
+        "tabsize": 4,
+        "prefix": "> ",
+        "suffix": " !",
+        "separator": ", ",
+        "column": "name",
+        "new_name": "renamed",
+        "columns": ["name"],
+        "key": "name",
+        "equals": "sample",
+        "path": "name",
+        "seconds": 90,
+        "old": 10,
+        "new": 12,
+        "value": 2,
+    }
+    failures = []
+    for name in sorted(EXTENDED_ACTIONS):
+        try:
+            result = execute_extended({**common_arguments, "action": name})
+            if not isinstance(result, dict) or not isinstance(result.get("status"), str):
+                failures.append(f"{name}: no structured result")
+        except Exception as exc:  # report every action rather than stopping at the first
+            failures.append(f"{name}: {type(exc).__name__}: {exc}")
+    assert not failures, "\\n".join(failures)

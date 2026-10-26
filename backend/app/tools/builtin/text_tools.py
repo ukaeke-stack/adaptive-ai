@@ -637,5 +637,11 @@ EXTENDED_ACTIONS.update({
     "extract_log_levels", "numeric_summary", "sum_numbers", "average_numbers",
     "median_numbers", "min_max_numbers", "percent_change", "parse_key_value_lines",
     "key_value_to_json", "json_to_key_value", "redact_urls", "redact_ip_addresses",
-    "extract_xml_tags", "strip_xml_tags", "extract_sql_tables",
+    "extract_xml_tags", "strip_xml_tags", "extract_sql_tables", "extract_json_paths", "json_query", "json_filter_array",
+    "json_sort_array", "json_unique_array", "json_to_markdown_table", "markdown_table_to_csv",
+    "extract_csv_emails", "csv_column_rename", "csv_column_remove", "csv_rows_to_json",
+    "json_to_xml_preview", "extract_xml_attributes", "extract_html_forms", "extract_html_scripts",
+    "extract_css_urls", "extract_sql_statements", "extract_markdown_images", "markdown_heading_slugs",
+    "text_to_html_paragraphs", "count_sentiment_terms", "readability_estimate", "extract_acronyms",
+    "normalize_phone_candidates", "extract_hex_colors",
 })

@@ -223,7 +223,7 @@ def test_financial_helpers_and_json_deep_merge_have_expected_results():
     assert discount["result"] == 80
     assert zero_interest["result"] == 100
     assert merged["status"] == "succeeded"
-    assert merged["json"] == {"account": {"name": "Ada", "active": False}, "items": [3]}
+    assert merged["values"] == {"account": {"name": "Ada", "active": False}, "items": [3]}
 
 
 def test_csv_unique_column_handles_quoted_delimiters():

@@ -66,9 +66,24 @@ def execute_extended(step: dict) -> dict | None:
     if action not in EXTENDED_ACTIONS:
         return None
 
-    value = "" if action == "convert_units" else _text(step)
-    if action != "convert_units" and not value.strip():
+    value = "" if action in {"convert_units", "generate_uuid", "generate_timestamp"} else _text(step)
+    if action not in {"convert_units", "generate_uuid", "generate_timestamp"} and not value.strip():
         return {"status": "needs_input", "message": "Add text in the task context before running this step."}
+    # Keep the original, reviewed core implementations here. All additional catalog
+    # actions are dispatched to the separate bounded executor so they cannot be
+    # accidentally shadowed by legacy experimental branches below.
+    CORE_ACTIONS = {
+        "count_characters", "estimate_reading_time", "word_frequency", "deduplicate_lines",
+        "sort_lines", "convert_case", "slugify", "extract_urls", "extract_headings",
+        "validate_json", "summarize_csv", "replace_text", "hash_text", "extract_numbers",
+        "extract_hashtags", "extract_mentions", "reverse_lines", "normalize_whitespace",
+        "count_lines", "extract_sentences", "redact_sensitive_data", "strip_html",
+        "compare_texts", "split_text", "base64_encode", "base64_decode", "parse_url",
+        "extract_markdown_links", "generate_checklist", "wrap_text", "convert_units",
+    }
+    if action not in CORE_ACTIONS:
+        from app.tools.builtin.extra_actions import execute_extra
+        return execute_extra(action, step, value)
     if action == "count_characters":
         return {"status": "succeeded", "characters_including_spaces": len(value),
                 "characters_excluding_whitespace": sum(not c.isspace() for c in value),

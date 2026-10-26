@@ -238,4 +238,101 @@ def execute_extra(action, step, value):
         try: start=datetime.fromisoformat(str(step.get("start_date","")).replace("Z","+00:00"));end=datetime.fromisoformat(str(step.get("end_date","")).replace("Z","+00:00"))
         except ValueError: return {"status":"failed","message":"Provide ISO start_date and end_date."}
         return {"status":"succeeded","days":(end-start).total_seconds()/86400}
+
+    if action in {"format_json","json_to_yaml_preview","mask_text","count_occurrences","shuffle_preview","extract_log_levels","extract_sql_tables","extract_sql_statements","extract_json_paths","extract_csv_emails","count_sentiment_terms","readability_estimate","extract_acronyms","normalize_phone_candidates","extract_hex_colors","trim_lines","csv_to_markdown","extract_sql_columns","extract_sql_parameters","extract_api_endpoints"}:
+        if action=="format_json":
+            try: obj=json.loads(value)
+            except json.JSONDecodeError as exc: return {"status":"failed","message":f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+            return {"status":"succeeded","json":json.dumps(obj,ensure_ascii=False,indent=2)[:MAX_TEXT]}
+        if action=="json_to_yaml_preview":
+            try: obj=json.loads(value)
+            except json.JSONDecodeError: return {"status":"failed","message":"Invalid JSON."}
+            def yaml_preview(item, depth=0):
+                pad="  "*depth
+                if isinstance(item,dict): return "\n".join(pad+str(k)+":"+(("\n"+yaml_preview(v,depth+1)) if isinstance(v,(dict,list)) else " "+json.dumps(v,ensure_ascii=False)) for k,v in item.items())
+                if isinstance(item,list): return "\n".join(pad+"-"+(("\n"+yaml_preview(v,depth+1)) if isinstance(v,(dict,list)) else " "+json.dumps(v,ensure_ascii=False)) for v in item)
+                return pad+json.dumps(item,ensure_ascii=False)
+            return {"status":"succeeded","yaml_preview":yaml_preview(obj)[:MAX_TEXT],"note":"Simple YAML-like preview; verify compatibility before using as configuration."}
+        if action=="mask_text":
+            terms=step.get("terms",[])
+            if not isinstance(terms,list) or any(not isinstance(x,str) for x in terms): return {"status":"failed","message":"terms must be a list of strings."}
+            result=value
+            for term in sorted((x for x in terms if x),key=len,reverse=True): result=re.sub(re.escape(term),str(step.get("replacement","[REDACTED]")),result,flags=re.I)
+            return {"status":"succeeded","text":result[:MAX_TEXT]}
+        if action=="count_occurrences":
+            needle=step.get("needle","")
+            if not isinstance(needle,str) or not needle: return {"status":"failed","message":"Provide a non-empty needle."}
+            return {"status":"succeeded","count":value.count(needle),"case_insensitive_count":len(re.findall(re.escape(needle),value,re.I))}
+        if action=="shuffle_preview":
+            import random
+            items=value.splitlines();seed=step.get("seed")
+            random.Random(seed if isinstance(seed,(int,str)) else 0).shuffle(items)
+            return {"status":"succeeded","lines":items[:MAX_ITEMS],"note":"Preview only; source content is not modified."}
+        if action=="extract_log_levels":
+            vals=re.findall(r"(?i)\b(DEBUG|INFO|NOTICE|WARN(?:ING)?|ERROR|CRITICAL|FATAL)\b",value)
+            return {"status":"succeeded","levels":[x.upper() for x in vals[:MAX_ITEMS]],"counts":dict(Counter(x.upper() for x in vals))}
+        if action=="extract_sql_tables":
+            vals=[]
+            for pattern in (r"(?i)\bfrom\s+([A-Za-z_][\w.$]*)",r"(?i)\bjoin\s+([A-Za-z_][\w.$]*)",r"(?i)\bupdate\s+([A-Za-z_][\w.$]*)",r"(?i)\binsert\s+into\s+([A-Za-z_][\w.$]*)"): vals.extend(re.findall(pattern,value))
+            return {"status":"succeeded","tables":list(dict.fromkeys(vals))[:MAX_ITEMS],"note":"Heuristic source parsing only; no query is executed."}
+        if action=="extract_sql_statements":
+            vals=[x.strip() for x in value.split(";") if x.strip()]
+            return {"status":"succeeded","statements":vals[:MAX_ITEMS],"count":len(vals),"note":"Semicolon splitting is heuristic."}
+        if action=="extract_json_paths":
+            try: obj=json.loads(value)
+            except json.JSONDecodeError: return {"status":"failed","message":"Invalid JSON."}
+            paths=[]
+            def walk(item,path="$"):
+                if isinstance(item,dict):
+                    for k,v in list(item.items())[:MAX_ITEMS]: paths.append(path+"."+str(k));walk(v,path+"."+str(k))
+                elif isinstance(item,list):
+                    for i,v in enumerate(item[:MAX_ITEMS]): paths.append(path+"["+str(i)+"]");walk(v,path+"["+str(i)+"]")
+            walk(obj)
+            return {"status":"succeeded","paths":paths[:MAX_ITEMS],"count":len(paths)}
+        if action=="extract_csv_emails":
+            vals=re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",value,re.I)
+            return {"status":"succeeded","emails":list(dict.fromkeys(vals))[:MAX_ITEMS]}
+        if action=="count_sentiment_terms":
+            pos={"good","great","excellent","happy","love","wonderful","best","success","positive","enjoy"};neg={"bad","poor","terrible","sad","hate","awful","worst","fail","negative","angry"}
+            words=[x.casefold() for x in re.findall(r"\b[\w'-]+\b",value)]
+            p=sum(x in pos for x in words);n=sum(x in neg for x in words)
+            return {"status":"succeeded","positive_terms":p,"negative_terms":n,"net":p-n,"note":"Simple keyword count, not a validated sentiment model."}
+        if action=="readability_estimate":
+            words=re.findall(r"\b[\w'-]+\b",value);sentences=[x for x in re.split(r"[.!?]+",value) if x.strip()]
+            syllables=0
+            for word in words:
+                w=re.sub(r"[^a-z]","",word.lower());groups=len(re.findall(r"[aeiouy]+",w))
+                syllables+=max(1,groups-int(w.endswith("e") and groups>1))
+            if not words or not sentences: return {"status":"failed","message":"Provide text with sentence-ending punctuation."}
+            score=206.835-1.015*(len(words)/len(sentences))-84.6*(syllables/len(words))
+            return {"status":"succeeded","words":len(words),"sentences":len(sentences),"estimated_syllables":syllables,"flesch_reading_ease":round(score,2),"note":"Approximate English-language estimate."}
+        if action=="extract_acronyms":
+            vals=re.findall(r"\b[A-Z][A-Z0-9]{1,}s?\b",value)
+            return {"status":"succeeded","acronyms":list(dict.fromkeys(vals))[:MAX_ITEMS]}
+        if action=="normalize_phone_candidates":
+            vals=re.findall(r"(?<!\w)\+?\d[\d ().-]{5,}\d(?!\w)",value)
+            normalized=[("+" if x.strip().startswith("+") else "")+re.sub(r"\D","",x) for x in vals]
+            return {"status":"succeeded","candidates":list(dict.fromkeys(normalized))[:MAX_ITEMS],"note":"Candidates are not validated against country numbering plans."}
+        if action=="extract_hex_colors":
+            vals=re.findall(r"(?i)#[0-9a-f]{3}(?:[0-9a-f]{3})?\b",value)
+            return {"status":"succeeded","colors":list(dict.fromkeys(x.upper() for x in vals))[:MAX_ITEMS]}
+        if action=="trim_lines": return {"status":"succeeded","text":"\n".join(x.strip() for x in lines)[:MAX_TEXT]}
+        if action=="csv_to_markdown":
+            try: rows=list(csv.reader(io.StringIO(value)))[:200]
+            except csv.Error as exc: return {"status":"failed","message":str(exc)}
+            if not rows: return {"status":"failed","message":"CSV is empty."}
+            header=rows[0];result="| "+" | ".join(x.replace("|","\\|") for x in header)+" |\n| "+" | ".join("---" for _ in header)+" |\n"
+            result+="\n".join("| "+" | ".join(x.replace("|","\\|") for x in row)+" |" for row in rows[1:])
+            return {"status":"succeeded","markdown":result[:MAX_TEXT],"rows":len(rows)-1}
+        if action=="extract_sql_columns":
+            cols=[]
+            for clause in re.findall(r"(?is)\bselect\s+(.*?)\s+from\b",value): cols.extend(x.strip().split()[-1].strip('"[]') for x in clause.split(",") if x.strip())
+            return {"status":"succeeded","columns":list(dict.fromkeys(cols))[:MAX_ITEMS],"note":"Heuristic parser; SQL is not executed."}
+        if action=="extract_sql_parameters":
+            vals=re.findall(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)|(?<!%)%\(([A-Za-z_][A-Za-z0-9_]*)\)s",value)
+            flat=[next((x for x in pair if x),"") for pair in vals]+re.findall(r"\$\d+",value)
+            return {"status":"succeeded","parameters":list(dict.fromkeys(x for x in flat if x))[:MAX_ITEMS]}
+        if action=="extract_api_endpoints":
+            vals=re.findall(r"(?i)\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+(/[^\s\"'<>]+)",value)
+            return {"status":"succeeded","endpoints":[{"method":m.upper(),"path":p} for m,p in vals[:MAX_ITEMS]]}
     return None

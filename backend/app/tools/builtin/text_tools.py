@@ -1143,6 +1143,18 @@ def execute_extended(step: dict) -> dict | None:
 # Additional bounded productivity actions.
 # These actions operate only on explicitly supplied content and never access external accounts.
 EXTENDED_ACTIONS.update({
+    "csv_column_sort",
+    "csv_select_rows",
+    "csv_find_value",
+    "csv_split_columns",
+    "json_array_filter_by_type",
+    "json_array_unique_by_key",
+    "extract_urls_from_markdown",
+    "extract_xml_cdata",
+    "extract_http_methods",
+    "extract_http_status_lines",
+    "parse_duration_iso8601",
+    "format_duration_iso8601",
     "format_phone_candidate",
     "mask_urls",
     "extract_top_words",

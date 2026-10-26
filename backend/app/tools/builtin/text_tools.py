@@ -1001,6 +1001,113 @@ def execute_extended(step: dict) -> dict | None:
             key=json.dumps(item,sort_keys=True,ensure_ascii=False)
             if key not in seen: seen.add(key);unique.append(item)
         return {"status":"succeeded","items":unique[:MAX_ITEMS],"unique_count":len(unique),"original_count":len(obj)}
+
+    if action in {"csv_filter_by_value","csv_rename_header","csv_column_summary","csv_quote_values","csv_to_html_table","html_table_to_csv"}:
+        if action=="html_table_to_csv":
+            tables=re.findall(r"(?is)<table\\b.*?</table\\s*>",value)
+            if not tables: return {"status":"failed","message":"No HTML table found."}
+            rows=[]
+            for row in re.findall(r"(?is)<tr\\b.*?</tr\\s*>",tables[0]):
+                cells=re.findall(r"(?is)<t[dh]\\b[^>]*>(.*?)</t[dh]\\s*>",row)
+                rows.append([re.sub(r"<[^>]*>","",cell).strip() for cell in cells])
+            if not rows: return {"status":"failed","message":"No table rows found."}
+            out=io.StringIO();csv.writer(out).writerows(rows[:MAX_ROWS])
+            return {"status":"succeeded","csv":out.getvalue()[:MAX_TEXT],"row_count":len(rows)}
+        try: rows=list(csv.DictReader(io.StringIO(value)))[:MAX_ROWS]
+        except csv.Error as exc: return {"status":"failed","message":str(exc)}
+        if not rows: return {"status":"failed","message":"CSV must contain a header row and data."}
+        fields=list(rows[0].keys())
+        if action=="csv_filter_by_value":
+            col,needle=step.get("column"),str(step.get("contains",""))
+            if col not in fields: return {"status":"failed","message":"Column does not exist."}
+            rows=[row for row in rows if needle.casefold() in str(row.get(col,"")).casefold()]
+        elif action=="csv_rename_header":
+            col,new=step.get("column"),step.get("new_name")
+            if col not in fields or not isinstance(new,str) or not new.strip() or (new in fields and new!=col): return {"status":"failed","message":"Provide an existing column and a unique new_name."}
+            fields=[new if k==col else k for k in fields];rows=[{(new if k==col else k):v for k,v in row.items()} for row in rows]
+        elif action=="csv_column_summary":
+            col=step.get("column")
+            if col not in fields: return {"status":"failed","message":"Column does not exist."}
+            vals=[str(row.get(col,"") or "") for row in rows]
+            return {"status":"succeeded","column":col,"non_empty":sum(bool(x.strip()) for x in vals),"unique_count":len(set(vals)),"sample_values":list(dict.fromkeys(vals))[:20]}
+        esc=lambda x: str(x or "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;")
+        if action=="csv_to_html_table":
+            html="<table><thead><tr>"+"".join("<th>"+esc(k)+"</th>" for k in fields)+"</tr></thead><tbody>"
+            html+="".join("<tr>"+"".join("<td>"+esc(row.get(k,""))+"</td>" for k in fields)+"</tr>" for row in rows[:200])+"</tbody></table>"
+            return {"status":"succeeded","html":html[:MAX_TEXT],"row_count":len(rows)}
+        out=io.StringIO();writer=csv.DictWriter(out,fieldnames=fields,quoting=csv.QUOTE_ALL if action=="csv_quote_values" else csv.QUOTE_MINIMAL);writer.writeheader();writer.writerows(rows)
+        return {"status":"succeeded","csv":out.getvalue()[:MAX_TEXT],"row_count":len(rows)}
+    if action == "extract_markdown_code_languages":
+        languages=re.findall(r"(?m)^\\s*\x60{3}([^\\s\x60]*)",value)
+        return {"status":"succeeded","languages":list(dict.fromkeys(x or "unspecified" for x in languages))[:MAX_ITEMS]}
+    if action == "extract_markdown_links_and_images":
+        links=[{"type":"link","label":label,"url":url} for label,url in re.findall(r"(?<!!)\\[([^\\]]+)\\]\\(([^)]+)\\)",value)]
+        links.extend({"type":"image","label":label,"url":url} for label,url in re.findall(r"!\\[([^\\]]*)\\]\\(([^)]+)\\)",value))
+        return {"status":"succeeded","items":links[:MAX_ITEMS],"count":len(links)}
+    if action == "extract_html_headings":
+        headings=[]
+        for level,title in re.findall(r"(?is)<h([1-6])\\b[^>]*>(.*?)</h[1-6]\\s*>",value):
+            headings.append({"level":int(level),"text":re.sub(r"<[^>]*>","",title).strip()})
+        return {"status":"succeeded","headings":headings[:MAX_ITEMS],"count":len(headings)}
+    if action == "extract_html_emails":
+        stripped=re.sub(r"<[^>]*>"," ",value)
+        emails=re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}",stripped,re.I)
+        return {"status":"succeeded","emails":list(dict.fromkeys(emails))[:MAX_ITEMS]}
+    if action == "extract_css_colors":
+        colors=re.findall(r"(?i)#[0-9a-f]{3,8}\\b|\\brgba?\\([^)]*\\)|\\bhsl\\([^)]*\\)",value)
+        return {"status":"succeeded","colors":list(dict.fromkeys(x.upper() if x.startswith("#") else x for x in colors))[:MAX_ITEMS]}
+    if action == "extract_sql_columns":
+        clauses=re.findall(r"(?is)\\bselect\\s+(.*?)\\s+from\\b",value)
+        columns=[]
+        for clause in clauses:
+            columns.extend(item.strip().split()[-1].strip(chr(96)+'"[]') for item in clause.split(",") if item.strip())
+        return {"status":"succeeded","columns":list(dict.fromkeys(columns))[:MAX_ITEMS],"note":"SQL source parsing heuristic; no query is executed."}
+    if action == "extract_sql_parameters":
+        params=re.findall(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)|(?<!%)%\\(([A-Za-z_][A-Za-z0-9_]*)\\)s|\\$\\d+",value)
+        flat=[next((x for x in group if x), "") for group in params]
+        flat.extend(re.findall(r"\\$\\d+",value))
+        return {"status":"succeeded","parameters":list(dict.fromkeys(flat))[:MAX_ITEMS]}
+    if action == "extract_api_endpoints":
+        paths=re.findall(r"(?i)\\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\\s+(/[^\\s\"'<>]+)",value)
+        return {"status":"succeeded","endpoints":[{"method":m.upper(),"path":p} for m,p in paths[:MAX_ITEMS]}
+    if action == "extract_env_variable_names":
+        names=re.findall(r"(?m)^\\s*(?:export\\s+)?([A-Z_][A-Z0-9_]*)\\s*=",value)
+        return {"status":"succeeded","variables":list(dict.fromkeys(names))[:MAX_ITEMS]}
+    if action == "extract_git_hashes":
+        hashes=re.findall(r"(?i)\\b(?:[0-9a-f]{40}|[0-9a-f]{64})\\b",value)
+        return {"status":"succeeded","hashes":list(dict.fromkeys(hashes))[:MAX_ITEMS]}
+    if action == "extract_semver_versions":
+        versions=re.findall(r"(?<![\\w])v?\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?",value)
+        return {"status":"succeeded","versions":list(dict.fromkeys(versions))[:MAX_ITEMS]}
+    if action == "extract_ipv6_candidates":
+        candidates=re.findall(r"(?i)(?<![\\w:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\\w:])",value)
+        return {"status":"succeeded","candidates":list(dict.fromkeys(candidates))[:MAX_ITEMS],"note":"Candidates are not fully validated as IPv6 addresses."}
+    if action == "extract_mac_addresses":
+        vals=re.findall(r"(?i)\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b",value)
+        return {"status":"succeeded","addresses":list(dict.fromkeys(x.upper().replace("-",":") for x in vals))[:MAX_ITEMS]}
+    if action == "extract_port_numbers":
+        vals=re.findall(r"(?i)\\b(?:port\\s*[:=]?\\s*)(\\d{1,5})\\b",value)
+        valid=[int(x) for x in vals if 1<=int(x)<=65535]
+        return {"status":"succeeded","ports":list(dict.fromkeys(valid))[:MAX_ITEMS]}
+    if action in {"parse_ini_preview","parse_env_preview"}:
+        result={}
+        for line in value.splitlines():
+            line=line.strip()
+            if not line or line.startswith(("#",";")): continue
+            if action=="parse_ini_preview" and line.startswith("["): continue
+            if "=" in line:
+                key,val=line.split("=",1);key=key.strip()
+                if key and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]*",key): result[key]=val.strip().strip('"').strip("'")
+        return {"status":"succeeded","values":dict(list(result.items())[:MAX_ITEMS]),"count":len(result),"note":"Preview parser; does not load configuration into the app."}
+    if action == "parse_log_timestamps":
+        stamps=re.findall(r"\\b\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:?\\d{2})?\\b",value)
+        return {"status":"succeeded","timestamps":list(dict.fromkeys(stamps))[:MAX_ITEMS]}
+    if action == "count_log_levels":
+        levels=re.findall(r"(?i)\\b(DEBUG|INFO|NOTICE|WARN(?:ING)?|ERROR|CRITICAL|FATAL)\\b",value)
+        return {"status":"succeeded","counts":dict(Counter(x.upper() for x in levels)),"total_matches":len(levels)}
+    if action == "extract_error_lines":
+        lines=[line for line in value.splitlines() if re.search(r"(?i)\\b(ERROR|CRITICAL|FATAL|EXCEPTION|TRACEBACK)\\b",line)]
+        return {"status":"succeeded","lines":lines[:MAX_ITEMS],"count":len(lines),"truncated":len(lines)>MAX_ITEMS}
     return None
 
 

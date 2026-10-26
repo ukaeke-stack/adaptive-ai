@@ -117,13 +117,13 @@ def _execute_step(step: dict) -> dict:
         value = step.get("input", "")
         if not isinstance(value, str) or not value.strip():
             return {"status": "needs_input", "message": "Add text in the task context before running this step."}
-        return {"status": "succeeded", "word_count": len(re.findall(r"\\S+", value)),
+        return {"status": "succeeded", "word_count": len(re.findall(r"\S+", value)),
                 "character_count": len(value), "paragraph_count": len([x for x in value.splitlines() if x.strip()])}
     if action == "extract_bullets":
         value = step.get("input", "")
         if not isinstance(value, str) or not value.strip():
             return {"status": "needs_input", "message": "Add text in the task context before running this step."}
-        bullets = [line.strip(" \\t-*•") for line in value.splitlines() if line.strip()]
+        bullets = [line.strip(" \t-*•") for line in value.splitlines() if line.strip()]
         return {"status": "succeeded", "bullets": bullets[:100]}
     if action == "draft_message":
         return {"status": "succeeded", "draft": step.get("input", ""),

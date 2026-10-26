@@ -79,3 +79,15 @@ def test_agent_search_action_reports_missing_provider_key(monkeypatch):
     result = agent_runtime._execute_step({"action": "web_search", "query": "test", "max_results": 5})
     assert result["status"] == "failed"
     assert result["message"] == "not configured"
+
+
+
+def test_research_then_summarize_chains_search_results():
+    from app.api.agent_runtime import _plan, _result_as_text
+    plan = _plan("Research Android notifications then summarize it", {})
+    assert [step["action"] for step in plan] == ["web_search", "summarize_text"]
+    assert plan[1]["input_from_previous"] is True
+    result = _result_as_text({"results": [
+        {"title": "Source", "snippet": "Useful facts", "url": "https://example.com"}
+    ]})
+    assert result == "Source\nUseful facts\nhttps://example.com"

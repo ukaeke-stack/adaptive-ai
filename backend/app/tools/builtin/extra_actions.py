@@ -193,16 +193,38 @@ def execute_extra(action, step, value):
             old=float(step.get("old",nums[0] if nums else 0));new=float(step.get("new",nums[1] if len(nums)>1 else 0))
             return {"status":"succeeded","percent_change":None if old==0 else (new-old)/abs(old)*100}
         if action.startswith("calculate_"):
-            amount=float(step.get("amount",nums[0] if nums else 0));rate=float(step.get("rate",nums[1] if len(nums)>1 else 0))/100
-            years=max(0,float(step.get("years",1)))
-            if action=="calculate_percentage": result=amount*rate
+            try:
+                amount=float(step.get("amount",nums[0] if nums else 0))
+                annual_rate=float(step.get("rate",nums[1] if len(nums)>1 else 0))
+                years=float(step.get("years",1))
+            except (TypeError, ValueError, OverflowError):
+                return {"status":"failed","message":"Amount, rate, and years must be valid numbers."}
+            if not all(math.isfinite(x) for x in (amount, annual_rate, years)):
+                return {"status":"failed","message":"Amount, rate, and years must be finite numbers."}
+            if amount < 0 or years < 0:
+                return {"status":"failed","message":"Amount and years must be non-negative."}
+            rate=annual_rate/100
+            if action=="calculate_compound_interest" and rate < -1:
+                return {"status":"failed","message":"Compound interest rate cannot be below -100%."}
+            if action=="calculate_loan_payment":
+                try:
+                    months=int(step.get("months",12))
+                except (TypeError, ValueError, OverflowError):
+                    return {"status":"failed","message":"Months must be a positive integer."}
+                if months < 1 or months > 1200:
+                    return {"status":"failed","message":"Months must be between 1 and 1200."}
+                monthly=rate/12
+                if monthly <= -1:
+                    return {"status":"failed","message":"Loan rate is outside the supported range."}
+                result=amount*monthly/(1-(1+monthly)**(-months)) if monthly else amount/months
+            elif action=="calculate_percentage": result=amount*rate
             elif action=="calculate_discount": result=amount*(1-rate)
             elif action=="calculate_tax": result=amount*rate
             elif action=="calculate_simple_interest": result=amount*rate*years
             elif action=="calculate_compound_interest": result=amount*((1+rate)**years)-amount
-            else:
-                months=max(1,int(step.get("months",12)));monthly=rate/12
-                result=amount*monthly/(1-(1+monthly)**(-months)) if monthly else amount/months
+            else: return {"status":"failed","message":"Unsupported calculation."}
+            if not math.isfinite(result):
+                return {"status":"failed","message":"Calculation result is outside the supported numeric range."}
             return {"status":"succeeded","result":round(result,6)}
         if not nums: return {"status":"failed","message":"No numbers found."}
         if action=="sum_numbers": return {"status":"succeeded","sum":sum(nums)}

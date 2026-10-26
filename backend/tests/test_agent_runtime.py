@@ -42,7 +42,8 @@ def test_agent_draft_never_sends_message():
     assert result["draft"] == "Hello"
 
 
-def test_agent_routes_are_registered_and_protected():
+def test_agent_routes_are_registered_and_protected(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
     schema = client.get("/openapi.json").json()
     assert "/v1/agent/tasks" in schema["paths"]
     assert "/v1/agent/tasks/{task_id}/run" in schema["paths"]

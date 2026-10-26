@@ -285,4 +285,34 @@ class AndroidDeviceActions(private val context: Context) {
         launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store")),
             "No browser is available to open the Play Store website.")
 
+    @JavascriptInterface
+    fun copyToClipboard(text: String?): Boolean {
+        val safeText = text?.take(12000) ?: return false
+        if (safeText.isEmpty()) return false
+        return try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Norah", safeText))
+            Toast.makeText(context, "Text copied to clipboard.", Toast.LENGTH_SHORT).show()
+            true
+        } catch (_: Exception) {
+            Toast.makeText(context, "Could not copy text to clipboard.", Toast.LENGTH_SHORT).show()
+            false
+        }
+    }
+
+    @JavascriptInterface
+    fun openAlarmSettings(): Boolean =
+        launch(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS),
+            "No clock application is available.")
+
+    @JavascriptInterface
+    fun openLanguageSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_LOCALE_SETTINGS),
+            "Could not open language settings.")
+
+    @JavascriptInterface
+    fun openSecuritySettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS),
+            "Could not open security settings.")
+
 }

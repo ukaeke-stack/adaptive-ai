@@ -779,6 +779,157 @@ def execute_extended(step: dict) -> dict | None:
     if action == "extract_hex_colors":
         colors = re.findall(r"(?i)(?<![\\w])#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})(?![\\w])", value)
         return {"status": "succeeded", "colors": list(dict.fromkeys(x.upper() for x in colors))[:MAX_ITEMS]}
+
+    if action in {"calculate_percentage", "calculate_discount", "calculate_tax"}:
+        try:
+            amount = float(step.get("amount", step.get("value")))
+            rate = float(step.get("rate_percent", step.get("rate")))
+        except (TypeError, ValueError):
+            return {"status": "failed", "message": "Provide numeric amount/value and rate_percent."}
+        if not math.isfinite(amount) or not math.isfinite(rate) or rate < 0 or rate > 10000:
+            return {"status": "failed", "message": "Values must be finite and rate must be between 0 and 10000."}
+        change = amount * rate / 100
+        if action == "calculate_percentage": result = change
+        elif action == "calculate_discount": result = amount - change
+        else: result = amount + change
+        return {"status": "succeeded", "base_amount": amount, "rate_percent": rate, "rate_amount": round(change, 8), "result": round(result, 8)}
+    if action in {"calculate_simple_interest", "calculate_compound_interest"}:
+        try:
+            principal = float(step.get("principal")); rate = float(step.get("annual_rate_percent")); years = float(step.get("years"))
+            periods = int(step.get("periods_per_year", 1))
+        except (TypeError, ValueError):
+            return {"status": "failed", "message": "Provide principal, annual_rate_percent, years and optional periods_per_year."}
+        if not all(math.isfinite(x) for x in (principal, rate, years)) or principal < 0 or rate < 0 or years < 0 or not 1 <= periods <= 365:
+            return {"status": "failed", "message": "Inputs must be finite and non-negative; periods_per_year must be 1–365."}
+        interest = principal*rate/100*years if action=="calculate_simple_interest" else principal*((1+rate/100/periods)**(periods*years)-1)
+        return {"status": "succeeded", "principal": principal, "interest": round(interest, 8), "total": round(principal+interest, 8), "method": "simple" if action=="calculate_simple_interest" else "compound", "note": "Mathematical estimate only; excludes fees, tax and changing rates."}
+    if action == "calculate_loan_payment":
+        try:
+            principal = float(step.get("principal")); annual_rate = float(step.get("annual_rate_percent")); months = int(step.get("months"))
+        except (TypeError, ValueError):
+            return {"status": "failed", "message": "Provide principal, annual_rate_percent and months."}
+        if not math.isfinite(principal) or not math.isfinite(annual_rate) or principal <= 0 or annual_rate < 0 or not 1 <= months <= 600:
+            return {"status": "failed", "message": "Principal must be positive, rate non-negative and months between 1 and 600."}
+        monthly = annual_rate/1200
+        payment = principal/months if monthly == 0 else principal*monthly/(1-(1+monthly)**(-months))
+        return {"status": "succeeded", "monthly_payment": round(payment, 2), "total_paid": round(payment*months, 2), "total_interest": round(payment*months-principal, 2), "note": "Estimate only; excludes fees and variable-rate changes."}
+    if action == "parse_iso_datetime":
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z","+00:00"))
+        except ValueError:
+            return {"status": "failed", "message": "Input must be a valid ISO-8601 date/time."}
+        return {"status": "succeeded", "iso": parsed.isoformat(), "has_timezone": parsed.tzinfo is not None, "date": parsed.date().isoformat(), "time": parsed.time().isoformat()}
+    if action == "date_difference":
+        try:
+            start = datetime.fromisoformat(str(step.get("start","")).replace("Z","+00:00"))
+            end = datetime.fromisoformat(str(step.get("end","")).replace("Z","+00:00"))
+        except ValueError:
+            return {"status": "failed", "message": "Provide ISO-8601 start and end values."}
+        if (start.tzinfo is None) != (end.tzinfo is None):
+            return {"status": "failed", "message": "Both dates must either include timezone offsets or omit them."}
+        delta = end-start
+        return {"status": "succeeded", "seconds": delta.total_seconds(), "days": delta.total_seconds()/86400, "whole_days": delta.days}
+    if action == "add_days":
+        try:
+            start = datetime.fromisoformat(str(step.get("date","")).replace("Z","+00:00")); days = int(step.get("days"))
+        except (ValueError, TypeError):
+            return {"status": "failed", "message": "Provide an ISO-8601 date and integer days."}
+        if abs(days) > 36500: return {"status": "failed", "message": "days must be between -36500 and 36500."}
+        return {"status": "succeeded", "result": (start+timedelta(days=days)).isoformat()}
+    if action == "generate_uuid":
+        from uuid import uuid4
+        return {"status": "succeeded", "uuid": str(uuid4())}
+    if action == "generate_timestamp":
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        return {"status": "succeeded", "iso": now.isoformat(), "unix_seconds": int(now.timestamp()), "unix_milliseconds": int(now.timestamp()*1000)}
+    if action in {"json_minify", "json_sort_keys"}:
+        try: obj=json.loads(value)
+        except json.JSONDecodeError as exc: return {"status":"failed","message":f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        result=json.dumps(obj,ensure_ascii=False,separators=(",",":") if action=="json_minify" else (",",": "),sort_keys=action=="json_sort_keys")
+        return {"status":"succeeded","json":result[:MAX_TEXT],"truncated":len(result)>MAX_TEXT}
+    if action in {"csv_to_json", "csv_count_rows", "csv_headers", "csv_column_unique", "csv_remove_blank_rows", "csv_reverse_rows", "csv_sample_rows", "csv_validate_shape", "tsv_to_csv", "csv_to_tsv"}:
+        delimiter="\\t" if action=="tsv_to_csv" else ","
+        try:
+            rows=list(csv.reader(io.StringIO(value),delimiter=delimiter))[:MAX_ROWS+1]
+        except csv.Error as exc: return {"status":"failed","message":f"Delimited text parsing failed: {exc}"}
+        if not rows: return {"status":"failed","message":"Input is empty."}
+        headers=rows[0]; data=rows[1:]
+        if action=="csv_headers": return {"status":"succeeded","headers":headers,"column_count":len(headers)}
+        if action=="csv_count_rows": return {"status":"succeeded","row_count":len(data),"column_count":len(headers)}
+        if action=="csv_validate_shape":
+            counts=Counter(len(row) for row in rows)
+            return {"status":"succeeded","valid":len(counts)==1,"expected_columns":len(headers),"row_width_counts":dict(counts)}
+        if action=="csv_column_unique":
+            try: col=int(step.get("column_index",0))
+            except (TypeError,ValueError): col=0
+            if col<0 or col>=len(headers): return {"status":"failed","message":"column_index is outside the available columns."}
+            vals=list(dict.fromkeys(row[col] for row in data if col<len(row)))
+            return {"status":"succeeded","values":vals[:MAX_ITEMS],"unique_count":len(vals)}
+        if action=="csv_remove_blank_rows": data=[row for row in data if any(cell.strip() for cell in row)]
+        if action=="csv_reverse_rows": data=list(reversed(data))
+        if action=="csv_sample_rows":
+            try: sample=int(step.get("sample_size",10))
+            except (TypeError,ValueError): sample=10
+            if not 1<=sample<=200: return {"status":"failed","message":"sample_size must be 1–200."}
+            data=data[:sample]
+        if action=="csv_to_json":
+            if not headers: return {"status":"failed","message":"CSV needs a header row."}
+            items=[{headers[i]:row[i] if i<len(row) else "" for i in range(len(headers))} for row in data]
+            return {"status":"succeeded","json":json.dumps(items,ensure_ascii=False)[:MAX_TEXT],"row_count":len(items)}
+        output=io.StringIO(); writer=csv.writer(output,delimiter="\\t" if action=="csv_to_tsv" else ",")
+        writer.writerow(headers); writer.writerows(data)
+        return {"status":"succeeded","text":output.getvalue()[:MAX_TEXT],"row_count":len(data)}
+    if action == "extract_list_items":
+        items=[]
+        for line in value.splitlines():
+            match=re.match(r"^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)(.+)$",line)
+            if match: items.append(match.group(1).strip())
+        return {"status":"succeeded","items":items[:MAX_ITEMS],"count":len(items)}
+    if action == "extract_numbered_lists":
+        items=re.findall(r"(?m)^\\s*\\d+[.)]\\s+(.+)$",value)
+        return {"status":"succeeded","items":[x.strip() for x in items[:MAX_ITEMS]],"count":len(items)}
+    if action == "extract_bullet_lists":
+        items=re.findall(r"(?m)^\\s*[-*+]\\s+(.+)$",value)
+        return {"status":"succeeded","items":[x.strip() for x in items[:MAX_ITEMS]],"count":len(items)}
+    if action in {"extract_first_paragraph","extract_last_paragraph"}:
+        paragraphs=[p.strip() for p in re.split(r"\\n\\s*\\n",value.strip()) if p.strip()]
+        selected=(paragraphs[:1] if action=="extract_first_paragraph" else paragraphs[-1:])
+        return {"status":"succeeded","paragraph":selected[0] if selected else "","paragraph_count":len(paragraphs)}
+    if action == "word_count_by_sentence":
+        sentences=[s for s in re.split(r"(?<=[.!?])\\s+",value.strip()) if s]
+        return {"status":"succeeded","sentences":[{"sentence":s[:2000],"word_count":len(re.findall(r"\\S+",s))} for s in sentences[:MAX_ITEMS]],"sentence_count":len(sentences)}
+    if action == "count_code_lines":
+        lines=value.splitlines()
+        blank=sum(not line.strip() for line in lines)
+        comments=sum(line.lstrip().startswith(("#","//","/*","*","<!--")) for line in lines if line.strip())
+        return {"status":"succeeded","total_lines":len(lines),"blank_lines":blank,"comment_like_lines":comments,"non_blank_lines":len(lines)-blank,"note":"Comment classification is heuristic and language-independent."}
+    if action == "strip_comments":
+        result=re.sub(r"(?s)<!--.*?-->","",value)
+        result=re.sub(r"(?m)^\\s*(?:#|//).*$","",result)
+        return {"status":"succeeded","text":result[:MAX_TEXT],"note":"Removes full-line hash/slash comments and HTML comments only."}
+    if action == "extract_html_ids":
+        ids=re.findall(r"""(?i)\\bid\\s*=\\s*["']([^"']+)["']""",value)
+        return {"status":"succeeded","ids":list(dict.fromkeys(ids))[:MAX_ITEMS]}
+    if action == "extract_css_classes":
+        classes=re.findall(r"""(?i)\\bclass\\s*=\\s*["']([^"']+)["']""",value)
+        tokens=[]
+        for item in classes: tokens.extend(item.split())
+        return {"status":"succeeded","classes":list(dict.fromkeys(tokens))[:MAX_ITEMS]}
+    if action == "find_email_domains":
+        emails=re.findall(r"[A-Z0-9._%+-]+@([A-Z0-9.-]+\\.[A-Z]{2,})",value,re.I)
+        return {"status":"succeeded","domains":list(dict.fromkeys(x.lower() for x in emails))[:MAX_ITEMS]}
+    if action == "extract_urls_domains":
+        urls=re.findall(r"https?://[^\\s<>\\\"']+",value,re.I)
+        result=[]
+        for url in urls:
+            host=urlparse(url).hostname
+            if host: result.append({"url":url,"domain":host.lower()})
+        return {"status":"succeeded","items":result[:MAX_ITEMS]}
+    if action == "extract_ip_addresses":
+        candidates=re.findall(r"(?<![\\w.])(?:\\d{1,3}\\.){3}\\d{1,3}(?![\\w.])",value)
+        valid=[x for x in candidates if all(0<=int(part)<=255 for part in x.split("."))]
+        return {"status":"succeeded","addresses":list(dict.fromkeys(valid))[:MAX_ITEMS]}
     return None
 
 

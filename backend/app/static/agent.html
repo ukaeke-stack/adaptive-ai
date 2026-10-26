@@ -120,6 +120,19 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Multi-step workflows</h3>
+  <p class="muted">Compose a sequence of supported local steps. Review the saved workflow, approve it, then run it explicitly. Message steps produce drafts only.</p>
+  <div class="field"><label for="workflowName">Workflow name</label><input id="workflowName" maxlength="100" placeholder="Prepare meeting materials"></div>
+  <div class="field"><label for="workflowSteps">Steps (JSON array)</label><textarea id="workflowSteps" maxlength="30000" rows="5">[
+  {"type":"summarize_text","input":"Paste text to summarize"},
+  {"type":"draft_message","input":"Draft a follow-up message"}
+]</textarea></div>
+  <div class="actions"><button id="saveWorkflow" type="button">Save workflow</button><button id="refreshWorkflows" type="button" class="ghost">Refresh workflows</button></div>
+  <div class="status" id="workflowStatus" role="status" aria-live="polite">Sign in to manage workflows.</div>
+  <div id="workflowList" class="task-list"></div>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Scheduled automations</h3>
   <p class="muted">Schedule a registered bounded local action. Runs are recorded with retry outcomes. This does not send messages, publish content, or perform financial transactions.</p>
   <div class="row">
@@ -316,6 +329,46 @@ async function loadSocial(){
   }catch(e){status.textContent=e.message}
 }
 $("refreshSocial").addEventListener("click",loadSocial);
+async function loadWorkflows(){
+  const status=$("workflowStatus"), list=$("workflowList");
+  try{
+    const data=await api("/v1/assistant/workflows");list.replaceChildren();
+    for(const workflow of (data.workflows||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=workflow.name;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent="Status: "+workflow.status;
+      const pre=document.createElement("pre");pre.textContent=pretty(workflow.steps);
+      const actions=document.createElement("div");actions.className="task-actions";
+      const preview=document.createElement("button");preview.className="ghost";preview.textContent="Preview";
+      preview.addEventListener("click",async()=>{try{const result=await api("/v1/assistant/workflows/"+encodeURIComponent(workflow.id)+"/preview",{method:"POST",body:"{}"});pre.textContent=pretty(result.preview)}catch(e){status.textContent=e.message}});
+      actions.append(preview);
+      if(workflow.status==="draft"){
+        const approve=document.createElement("button");approve.textContent="Approve";
+        approve.addEventListener("click",async()=>{try{await api("/v1/assistant/workflows/"+encodeURIComponent(workflow.id)+"/approve",{method:"POST",body:"{}"});await loadWorkflows()}catch(e){status.textContent=e.message}});
+        actions.append(approve);
+      }
+      if(workflow.status==="approved"){
+        const run=document.createElement("button");run.textContent="Run approved workflow";
+        run.addEventListener("click",async()=>{if(!confirm("Run this approved workflow now?"))return;try{const result=await api("/v1/assistant/workflows/"+encodeURIComponent(workflow.id)+"/run",{method:"POST",body:"{}"});pre.textContent=pretty(result);await loadWorkflows()}catch(e){status.textContent=e.message}});
+        actions.append(run);
+      }
+      const runs=document.createElement("button");runs.className="ghost";runs.textContent="Run history";
+      runs.addEventListener("click",async()=>{try{const result=await api("/v1/assistant/workflows/"+encodeURIComponent(workflow.id)+"/runs");pre.textContent=pretty(result.runs)}catch(e){status.textContent=e.message}});
+      actions.append(runs);card.append(title,meta,pre,actions);list.append(card);
+    }
+    status.textContent=(data.workflows||[]).length+" workflow(s) loaded.";
+  }catch(e){status.textContent=e.message}
+}
+$("saveWorkflow").addEventListener("click",async()=>{
+  const status=$("workflowStatus");
+  try{const name=$("workflowName").value.trim();if(!name)throw new Error("Enter a workflow name.");
+    let steps;try{steps=JSON.parse($("workflowSteps").value)}catch(_){throw new Error("Workflow steps must be valid JSON.")}
+    if(!Array.isArray(steps)||!steps.length)throw new Error("Workflow steps must be a non-empty JSON array.");
+    await api("/v1/assistant/workflows",{method:"POST",body:JSON.stringify({name,steps})});
+    status.textContent="Workflow saved as a draft.";await loadWorkflows();
+  }catch(e){status.textContent=e.message}
+});
+$("refreshWorkflows").addEventListener("click",loadWorkflows);
 async function loadAutomations(){
   const status=$("automationStatus"), list=$("automationList");
   try{
@@ -362,7 +415,7 @@ $("saveAutomation").addEventListener("click",async()=>{
 $("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders();await loadWorkflows()})();
 </script>
 </body>
 </html>

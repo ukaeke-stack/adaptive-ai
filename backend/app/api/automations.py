@@ -220,7 +220,7 @@ def _run_one(row: dict) -> None:
     attempts = row["max_retries"] + 1
     for attempt in range(1, attempts + 1):
         try:
-            result = execute_extended({"action": row["action"], **json.loads(row["input_json"])})
+            result = execute_extended({**json.loads(row["input_json"]), "action": row["action"]})
             if result is None:
                 raise ValueError("Action is not implemented.")
             final = result

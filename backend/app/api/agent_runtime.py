@@ -24,14 +24,14 @@ from sqlalchemy import text
 
 from app.memory.store import _ready_engine
 from app.security.sessions import require_user
-from app.tools.builtin.text_tools import execute_extended
+from app.tools.builtin.text_tools import EXTENDED_ACTIONS, execute_extended
 from app.api.research import search_for_agent
 
 router = APIRouter(prefix="/v1/agent", tags=["autonomous agent"])
 
 STATUSES = {"planned", "running", "succeeded", "partially_failed", "failed", "cancelled"}
 TEXT_ACTIONS = {"count_words", "extract_bullets", "summarize_text", "extract_contacts", "extract_dates"}
-SAFE_ACTIONS = TEXT_ACTIONS | {"draft_message", "calculate", "create_reminder", "web_search"}
+SAFE_ACTIONS = TEXT_ACTIONS | EXTENDED_ACTIONS | {"draft_message", "calculate", "create_reminder", "web_search"}
 
 
 def _now() -> str:
@@ -132,6 +132,10 @@ def _plan_single(goal: str, context: dict[str, str]) -> list[dict]:
         (("wrap text", "wrap lines", "line wrap"), "wrap_text"),
         (("convert units", "unit conversion", "convert km", "convert kg", "convert celsius", "convert fahrenheit"), "convert_units"),
     ]
+    known = {action for _, action in extended_patterns}
+    for action in sorted(EXTENDED_ACTIONS - known):
+        phrase = action.replace("_", " ")
+        extended_patterns.append(((phrase, phrase.replace(" ", "-")), action))
     if not plan:
         for phrases, action in extended_patterns:
             if any(phrase in lower for phrase in phrases):
@@ -154,6 +158,12 @@ def _plan_single(goal: str, context: dict[str, str]) -> list[dict]:
                     step["number"] = context.get("number", "")
                     step["from_unit"] = context.get("from_unit", "")
                     step["to_unit"] = context.get("to_unit", "")
+                for key in ("second_input", "find", "replacement", "needle", "pattern", "affix",
+                            "separator", "prefix", "visible_characters", "minimum_length", "limit",
+                            "tab_size", "form", "column", "contains", "descending", "columns",
+                            "chunk_size", "width", "ignore_case"):
+                    if key in context and key not in step:
+                        step[key] = context[key]
                 plan.append(step)
                 break
     if not plan:

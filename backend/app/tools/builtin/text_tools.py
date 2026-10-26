@@ -80,7 +80,12 @@ def execute_extended(step: dict) -> dict | None:
         "is_leap_year", "add_days", "add_months", "date_difference",
         "business_days_between", "add_business_days", "format_datetime",
         "convert_timezone", "age_from_date", "generate_password", "format_duration",
-        "convert_milliseconds_to_duration", "format_currency_preview",
+        "convert_milliseconds_to_duration", "format_duration_iso8601", "format_currency_preview",
+        "format_phone_candidate", "calculate_ratio", "calculate_proportion", "calculate_markup",
+        "calculate_profit_margin", "calculate_compound_growth", "calculate_tip", "calculate_split_bill",
+        "calculate_mean", "calculate_mode", "calculate_variance", "calculate_standard_deviation",
+        "calculate_range", "calculate_weighted_average", "calculate_geometric_mean",
+        "calculate_harmonic_mean", "calculate_z_scores", "calculate_percentile",
     }
     value = "" if action in ARGUMENT_ONLY_ACTIONS else _text(step)
     if action not in ARGUMENT_ONLY_ACTIONS and not value.strip():

@@ -68,7 +68,7 @@
     <div class="field"><label for="noteTags">Tags (comma-separated)</label><input id="noteTags" maxlength="500" placeholder="work, ideas"></div>
   </div>
   <div class="field"><label for="noteBody">Note content</label><textarea id="noteBody" maxlength="100000" rows="3" placeholder="Write a note…"></textarea></div>
-  <div class="actions"><button id="saveNote" type="button">Save note</button><button id="refreshNotes" type="button" class="ghost">Refresh notes</button></div><div class="actions"><button id="exportWorkspaceJson" type="button" class="ghost">Export JSON</button><button id="exportWorkspaceCsv" type="button" class="ghost">Export CSV</button></div>
+  <div class="actions"><button id="saveNote" type="button">Save note</button><button id="refreshNotes" type="button" class="ghost">Refresh notes</button></div><div class="actions"><button id="exportWorkspaceJson" type="button" class="ghost">Export JSON</button><button id="exportWorkspaceCsv" type="button" class="ghost">Export CSV</button></div><div class="row"><div class="field"><label for="workspaceImportFile">Import workspace JSON backup</label><input id="workspaceImportFile" type="file" accept="application/json,.json"></div><div class="field" style="justify-content:end"><button id="importWorkspace" type="button" class="ghost">Import backup</button></div></div>
   <div class="field"><label for="noteSearch">Search notes</label><input id="noteSearch" maxlength="200" placeholder="Search title or content"></div>
   <div id="noteList" class="task-list"></div>
   <div class="divider" style="height:1px;background:#29425d;margin:16px 0"></div>
@@ -281,6 +281,18 @@ $("saveTodo").addEventListener("click",async()=>{
     const local=$("todoDue").value;const due=local?new Date(local).toISOString():null;
     await api("/v1/workspace/todos",{method:"POST",body:JSON.stringify({title,description:$("todoDescription").value,due_at:due,priority:$("todoPriority").value})});
     $("todoTitle").value="";$("todoDescription").value="";$("todoDue").value="";status.textContent="To-do saved.";await loadTodos();
+  }catch(e){status.textContent=e.message}
+});
+$("importWorkspace").addEventListener("click",async()=>{
+  const file=$("workspaceImportFile").files[0],status=$("workspaceStatus");
+  if(!file){status.textContent="Choose a JSON backup file first.";return}
+  if(file.size>5*1024*1024){status.textContent="Backup must be 5 MB or smaller.";return}
+  try{
+    const parsed=JSON.parse(await file.text());
+    if(!parsed||typeof parsed!=="object"||(!Array.isArray(parsed.notes)&&!Array.isArray(parsed.todos)))throw new Error("Backup must contain notes and/or todos arrays.");
+    const result=await api("/v1/workspace/import",{method:"POST",body:JSON.stringify({notes:parsed.notes||[],todos:parsed.todos||[]})});
+    status.textContent="Imported "+result.imported.notes+" notes and "+result.imported.todos+" to-dos.";
+    await loadNotes();await loadTodos();
   }catch(e){status.textContent=e.message}
 });
 $("exportWorkspaceJson").addEventListener("click",()=>window.location.assign("/v1/workspace/export?format=json"));

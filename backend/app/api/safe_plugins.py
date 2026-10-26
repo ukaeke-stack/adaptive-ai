@@ -11,7 +11,8 @@ from app.tools.registry import get_tool
 from app.tools.builtin.text_tools import EXTENDED_ACTIONS
 
 router = APIRouter(prefix="/v1/plugin-runtime", tags=["safe plugin runtime"])
-ALLOWED = frozenset(EXTENDED_ACTIONS) | {"count_words", "extract_bullets", "draft_message"}
+ALLOWED = {"count_words", "extract_bullets", "draft_message"}
+REGISTERED_ALLOWED = frozenset(EXTENDED_ACTIONS) | ALLOWED
 
 def _tables():
     with _ready_engine().begin() as conn:
@@ -28,7 +29,7 @@ class Manifest(BaseModel):
 @router.post("/proposals")
 def propose(body: Manifest, request: Request):
     user = require_user(request)
-    if len(set(body.capabilities)) != len(body.capabilities) or set(body.capabilities) - ALLOWED:
+    if len(set(body.capabilities)) != len(body.capabilities) or set(body.capabilities) - REGISTERED_ALLOWED:
         raise HTTPException(status_code=422, detail="Only unique allow-listed built-in capabilities are accepted.")
     _tables()
     pid, now = str(uuid4()), datetime.now(timezone.utc).isoformat()

@@ -126,3 +126,54 @@ def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors
         except Exception as exc:  # report every action rather than stopping at the first
             failures.append(f"{name}: {type(exc).__name__}: {exc}")
     assert not failures, "\\n".join(failures)
+
+
+def test_url_validator_rejects_malformed_authority_and_whitespace():
+    from app.tools.builtin.text_tools import execute_extended
+
+    valid = execute_extended({"action": "validate_url", "input": "https://example.com/path?q=1"})
+    bad_port = execute_extended({"action": "validate_url", "input": "https://example.com:bad/path"})
+    missing_host = execute_extended({"action": "validate_url", "input": "https:///missing-host"})
+    embedded_space = execute_extended({"action": "validate_url", "input": "https://example.com/a b"})
+
+    assert valid["valid"] is True
+    assert bad_port["valid"] is False
+    assert missing_host["valid"] is False
+    assert embedded_space["valid"] is False
+
+
+def test_json_csv_and_text_helpers_return_expected_values():
+    from app.tools.builtin.text_tools import execute_extended
+
+    json_result = execute_extended({"action": "json_minify", "input": '{ "b": 2, "a": 1 }'})
+    csv_result = execute_extended({
+        "action": "csv_column_unique",
+        "input": "name,city\\nAda,Lagos\\nTola,Abuja\\nSam,Lagos",
+        "column": "city",
+    })
+    text_result = execute_extended({"action": "extract_list_items", "input": "- alpha\\n2. beta\\nplain text"})
+    count_result = execute_extended({"action": "count_occurrences", "input": "Banana banana", "needle": "ana"})
+
+    assert json_result["json"] == '{"b":2,"a":1}'
+    assert csv_result["values"] == ["Lagos", "Abuja"]
+    assert text_result["items"] == ["alpha", "beta"]
+    assert count_result["count"] == 1
+    assert count_result["case_insensitive_count"] == 2
+
+
+def test_strict_validators_reject_invalid_candidates():
+    from app.tools.builtin.text_tools import execute_extended
+
+    cases = [
+        ("validate_date_iso", "2026-02-30", False),
+        ("validate_ipv6", "2001:db8::1", True),
+        ("validate_ipv6", "not-an-ipv6-address", False),
+        ("validate_hex_color", "#12FG56", False),
+        ("validate_semver", "1.2", False),
+        ("validate_port", "70000", False),
+        ("validate_json_lines", '{"ok": true}\\nnot-json', False),
+    ]
+    for action, value, expected in cases:
+        result = execute_extended({"action": action, "input": value})
+        assert result["status"] == "succeeded", (action, result)
+        assert result["valid"] is expected, (action, value, result)

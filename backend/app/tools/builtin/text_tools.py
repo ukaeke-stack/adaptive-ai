@@ -550,4 +550,10 @@ EXTENDED_ACTIONS.update({
     "normalize_newlines", "count_occurrences", "extract_lines_matching",
     "exclude_lines_matching", "prefix_lines", "suffix_lines",
     "join_lines", "split_words", "reverse_words", "shuffle_preview",
+    "extract_domains", "extract_file_extensions", "json_keys", "json_value_types",
+    "lines_to_json_array", "extract_todo_comments", "extract_functions", "extract_imports",
+    "extract_log_levels", "numeric_summary", "sum_numbers", "average_numbers",
+    "median_numbers", "min_max_numbers", "percent_change", "parse_key_value_lines",
+    "key_value_to_json", "json_to_key_value", "redact_urls", "redact_ip_addresses",
+    "extract_xml_tags", "strip_xml_tags", "extract_sql_tables",
 })

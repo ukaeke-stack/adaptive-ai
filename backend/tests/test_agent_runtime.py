@@ -84,6 +84,8 @@ def test_agent_workspace_is_served():
     assert 'id="extractPdf"' in response.text
     assert 'id="ocrPdf"' in response.text
     assert "scheduleReminder" in response.text
+    assert 'id="researchQuery"' in response.text
+    assert "runResearch" in response.text
     assert "Local Android reminder notification scheduled" in response.text
 
 

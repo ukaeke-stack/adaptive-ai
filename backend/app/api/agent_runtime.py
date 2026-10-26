@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import math
 import operator
 import re
 from datetime import datetime, timezone
@@ -188,6 +189,8 @@ def _calculate(expression: str) -> float | int:
             if isinstance(node.op, ast.Pow) and abs(right) > 8:
                 raise ValueError("Exponent is too large.")
             result = ops[type(node.op)](left, right)
+            if not isinstance(result, (int, float)) or not math.isfinite(result):
+                raise ValueError("Result must be a finite real number.")
             if abs(result) > 10**15:
                 raise ValueError("Result is too large.")
             return result

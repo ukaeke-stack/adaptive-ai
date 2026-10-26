@@ -1164,6 +1164,9 @@ def execute_extended(step: dict) -> dict | None:
 # Additional bounded productivity actions.
 # These actions operate only on explicitly supplied content and never access external accounts.
 EXTENDED_ACTIONS.update({
+    "extract_xml_doctype",
+    "extract_css_font_families",
+    "json_object_value_count",
     "csv_column_sort",
     "csv_select_rows",
     "csv_find_value",

@@ -1200,7 +1200,18 @@ def execute_extra(action, step, value):
             if action=="parse_duration":
                 n=sum(float(x)*{"d":86400,"h":3600,"m":60,"s":1,"ms":.001}[u.lower()] for x,u in re.findall(r"(\d+(?:\.\d+)?)\s*(ms|d|h|m|s)\b",value.lower()))
                 return {"status":"succeeded","seconds":n}
-            n=float(step.get("seconds",value)) if action=="format_duration" else float(value)*(60 if action=="convert_minutes_to_seconds" else 1/60 if action=="convert_seconds_to_minutes" else .001)
+            if action=="format_duration":
+                n=float(step.get("seconds",value))
+            elif action=="convert_milliseconds_to_duration":
+                n=float(step.get("milliseconds",value)) / 1000
+            elif action=="convert_milliseconds_to_seconds":
+                n=float(step.get("milliseconds",value)) / 1000
+            elif action=="convert_minutes_to_seconds":
+                n=float(step.get("minutes",value)) * 60
+            elif action=="convert_seconds_to_minutes":
+                n=float(step.get("seconds",value)) / 60
+            else:
+                n=float(value)
             if action in {"format_duration","convert_milliseconds_to_duration"}:
                 n=int(max(0,n));d,r=divmod(n,86400);h,r=divmod(r,3600);m,s=divmod(r,60)
                 return {"status":"succeeded","seconds":n,"formatted":f"{d}d {h}h {m}m {s}s"}

@@ -323,7 +323,7 @@ def execute_extra(action, step, value):
             if not rows: return {"status":"failed","message":"CSV is empty."}
             header=rows[0];result="| "+" | ".join(x.replace("|","\\|") for x in header)+" |\n| "+" | ".join("---" for _ in header)+" |\n"
             result+="\n".join("| "+" | ".join(x.replace("|","\\|") for x in row)+" |" for row in rows[1:])
-            return {"status":"succeeded","markdown":result[:MAX_TEXT],"rows":len(rows)-1}
+            return {"status":"succeeded","markdown":result[:MAX_TEXT],"markdown_table":result[:MAX_TEXT],"rows":len(rows)-1}
         if action=="extract_sql_columns":
             cols=[]
             for clause in re.findall(r"(?is)\bselect\s+(.*?)\s+from\b",value): cols.extend(x.strip().split()[-1].strip('"[]') for x in clause.split(",") if x.strip())

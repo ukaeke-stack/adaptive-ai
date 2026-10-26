@@ -225,4 +225,39 @@ class AndroidDeviceActions(private val context: Context) {
         launch(Intent(android.provider.Settings.ACTION_SETTINGS),
             "Could not open Android settings.")
 
+    @JavascriptInterface
+    fun openBrowser(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")),
+            "No browser application is available.")
+
+    @JavascriptInterface
+    fun openDownloads(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, MediaStore.Downloads.EXTERNAL_CONTENT_URI),
+            "No downloads viewer is available.")
+
+    @JavascriptInterface
+    fun openYouTube(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com")),
+            "No compatible video app or browser is available.")
+
+    @JavascriptInterface
+    fun openBatterySettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS),
+            "Could not open battery settings.")
+
+    @JavascriptInterface
+    fun openDisplaySettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS),
+            "Could not open display settings.")
+
+    @JavascriptInterface
+    fun openSoundSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_SOUND_SETTINGS),
+            "Could not open sound settings.")
+
+    @JavascriptInterface
+    fun openAccessibilitySettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS),
+            "Could not open accessibility settings.")
+
 }

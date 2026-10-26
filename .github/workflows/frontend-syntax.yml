@@ -41,16 +41,20 @@ jobs:
                           self.scripts.append(source)
                       self.in_script = False
 
-          html = Path("backend/app/static/index.html").read_text(encoding="utf-8")
-          parser = Scripts()
-          parser.feed(html)
-          if not parser.scripts:
-              raise SystemExit("No inline JavaScript found")
+          pages = [Path("backend/app/static/index.html"), Path("backend/app/static/agent.html")]
           out = Path("/tmp/norah-inline-js")
           out.mkdir(exist_ok=True)
-          for index, source in enumerate(parser.scripts):
-              (out / f"script-{index}.js").write_text(source, encoding="utf-8")
-          print(f"Extracted {len(parser.scripts)} inline script(s)")
+          total = 0
+          for page in pages:
+              parser = Scripts()
+              parser.feed(page.read_text(encoding="utf-8"))
+              if not parser.scripts:
+                  raise SystemExit(f"No inline JavaScript found in {page}")
+              for index, source in enumerate(parser.scripts):
+                  target = out / f"{page.stem}-{index}.js"
+                  target.write_text(source, encoding="utf-8")
+                  total += 1
+          print(f"Extracted {total} inline script(s) from {len(pages)} pages")
           PY
           for file in /tmp/norah-inline-js/*.js; do
             echo "Checking $file"

@@ -70,7 +70,7 @@ app.openapi = custom_openapi
 
 
 @app.on_event("startup")
-def initialize_persistent_storage() -> None:
+async def initialize_persistent_storage() -> None:
     """Initialize persistent storage and start the scheduled automation worker."""
     initialize_store()
     start_automation_worker()

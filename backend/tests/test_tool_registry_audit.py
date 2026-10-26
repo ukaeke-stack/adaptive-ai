@@ -89,21 +89,21 @@ def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors
         try:
             action_input = common_arguments["input"]
             if name.startswith("csv_") or name == "csv_to_tsv":
-                action_input = "name,age\\nAlice,30\\nBob,40\\n,\\n"
+                action_input = "name,age\nAlice,30\nBob,40\n,\n"
             elif name == "tsv_to_csv":
-                action_input = "name\\tage\\nAlice\\t30\\nBob\\t40\\n"
+                action_input = "name\\tage\nAlice\\t30\nBob\\t40\n"
             elif name.startswith("json_") or name in {"json_minify", "json_sort_keys", "json_to_xml_preview"}:
                 action_input = '{"name":"Alice","age":30,"items":[1,2]}'
                 if any(token in name for token in ("array", "jsonl", "to_csv", "to_markdown_table")):
                     action_input = '[{"name":"Alice","age":30},{"name":"Bob","age":40}]'
             elif name == "markdown_table_to_csv" or name == "extract_markdown_tables":
-                action_input = "| name | age |\\n| --- | --- |\\n| Alice | 30 |"
+                action_input = "| name | age |\n| --- | --- |\n| Alice | 30 |"
             elif name in {"convert_percentage_decimal", "convert_decimal_percentage", "convert_fraction_decimal", "decimal_to_fraction", "fraction_to_decimal", "format_bytes", "format_number_commas", "parse_number_locale", "convert_milliseconds_to_duration", "convert_milliseconds_to_seconds", "convert_minutes_to_seconds", "convert_seconds_to_minutes", "calculate_square_root", "calculate_power", "calculate_logarithm", "calculate_permutation", "calculate_combination", "calculate_compound_rate", "calculate_sales_tax", "calculate_average_speed", "calculate_distance", "calculate_time"}:
                 action_input = "1/2" if name == "fraction_to_decimal" else ("0.5" if name in {"convert_decimal_percentage", "decimal_to_fraction", "format_bytes", "format_number_commas", "parse_number_locale"} else ("50%" if name in {"convert_percentage_decimal", "convert_fraction_decimal"} else "1500"))
             elif name == "extract_env_variable_names":
-                action_input = "export TEST_KEY=hello\\nOTHER_VALUE=world"
+                action_input = "export TEST_KEY=hello\nOTHER_VALUE=world"
             elif name == "extract_functions":
-                action_input = "def example():\\n    return 1\\nfunction sample() {}"
+                action_input = "def example():\n    return 1\nfunction sample() {}"
             elif name == "extract_bracketed_text":
                 action_input = "value [inside] and (outside)"
             elif name == "extract_quoted_text":
@@ -113,9 +113,9 @@ def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors
             elif name == "extract_ip_addresses":
                 action_input = "IPs 192.168.1.1 and 2001:db8::1"
             elif name == "extract_list_items":
-                action_input = "- one\\n2. two"
+                action_input = "- one\n2. two"
             elif name == "extract_markdown_tables":
-                action_input = "| name | age |\\n| --- | --- |\\n| Alice | 30 |"
+                action_input = "| name | age |\n| --- | --- |\n| Alice | 30 |"
             elif name == "find_email_domains":
                 action_input = "person@example.com other@sample.org"
             elif name == "extract_urls_domains":
@@ -125,7 +125,7 @@ def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors
                 failures.append(f"{name}: no structured result")
         except Exception as exc:  # report every action rather than stopping at the first
             failures.append(f"{name}: {type(exc).__name__}: {exc}")
-    assert not failures, "\\n".join(failures)
+    assert not failures, "\n".join(failures)
 
 
 def test_url_validator_rejects_malformed_authority_and_whitespace():
@@ -148,10 +148,10 @@ def test_json_csv_and_text_helpers_return_expected_values():
     json_result = execute_extended({"action": "json_minify", "input": '{ "b": 2, "a": 1 }'})
     csv_result = execute_extended({
         "action": "csv_column_unique",
-        "input": "name,city\\nAda,Lagos\\nTola,Abuja\\nSam,Lagos",
+        "input": "name,city\nAda,Lagos\nTola,Abuja\nSam,Lagos",
         "column": "city",
     })
-    text_result = execute_extended({"action": "extract_list_items", "input": "- alpha\\n2. beta\\nplain text"})
+    text_result = execute_extended({"action": "extract_list_items", "input": "- alpha\n2. beta\nplain text"})
     count_result = execute_extended({"action": "count_occurrences", "input": "Banana banana", "needle": "ana"})
 
     assert json_result["json"] == '{"b":2,"a":1}'
@@ -171,7 +171,7 @@ def test_strict_validators_reject_invalid_candidates():
         ("validate_hex_color", "#12FG56", False),
         ("validate_semver", "1.2", False),
         ("validate_port", "70000", False),
-        ("validate_json_lines", '{"ok": true}\\nnot-json', False),
+        ("validate_json_lines", '{"ok": true}\nnot-json', False),
     ]
     for action, value, expected in cases:
         result = execute_extended({"action": action, "input": value})

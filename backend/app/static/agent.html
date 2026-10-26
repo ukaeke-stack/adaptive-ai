@@ -68,7 +68,7 @@
     <div class="field"><label for="noteTags">Tags (comma-separated)</label><input id="noteTags" maxlength="500" placeholder="work, ideas"></div>
   </div>
   <div class="field"><label for="noteBody">Note content</label><textarea id="noteBody" maxlength="100000" rows="3" placeholder="Write a note…"></textarea></div>
-  <div class="actions"><button id="saveNote" type="button">Save note</button><button id="refreshNotes" type="button" class="ghost">Refresh notes</button></div>
+  <div class="actions"><button id="saveNote" type="button">Save note</button><button id="refreshNotes" type="button" class="ghost">Refresh notes</button></div><div class="actions"><button id="exportWorkspaceJson" type="button" class="ghost">Export JSON</button><button id="exportWorkspaceCsv" type="button" class="ghost">Export CSV</button></div>
   <div class="field"><label for="noteSearch">Search notes</label><input id="noteSearch" maxlength="200" placeholder="Search title or content"></div>
   <div id="noteList" class="task-list"></div>
   <div class="divider" style="height:1px;background:#29425d;margin:16px 0"></div>
@@ -283,6 +283,8 @@ $("saveTodo").addEventListener("click",async()=>{
     $("todoTitle").value="";$("todoDescription").value="";$("todoDue").value="";status.textContent="To-do saved.";await loadTodos();
   }catch(e){status.textContent=e.message}
 });
+$("exportWorkspaceJson").addEventListener("click",()=>window.location.assign("/v1/workspace/export?format=json"));
+$("exportWorkspaceCsv").addEventListener("click",()=>window.location.assign("/v1/workspace/export?format=csv"));
 $("refreshNotes").addEventListener("click",loadNotes);$("refreshTodos").addEventListener("click",loadTodos);
 $("noteSearch").addEventListener("change",loadNotes);$("todoFilter").addEventListener("change",loadTodos);
 const nativeSpeech=()=>window.AdaptiveNative;

@@ -930,6 +930,77 @@ def execute_extended(step: dict) -> dict | None:
         candidates=re.findall(r"(?<![\\w.])(?:\\d{1,3}\\.){3}\\d{1,3}(?![\\w.])",value)
         valid=[x for x in candidates if all(0<=int(part)<=255 for part in x.split("."))]
         return {"status":"succeeded","addresses":list(dict.fromkeys(valid))[:MAX_ITEMS]}
+
+    if action == "extract_words":
+        words = re.findall(r"[\\w’'-]+", value, re.UNICODE)
+        return {"status":"succeeded","words":words[:MAX_ITEMS],"count":len(words),"truncated":len(words)>MAX_ITEMS}
+    if action == "extract_unique_words":
+        words = list(dict.fromkeys(re.findall(r"[\\w’'-]+", value.casefold(), re.UNICODE)))
+        return {"status":"succeeded","words":words[:MAX_ITEMS],"count":len(words),"truncated":len(words)>MAX_ITEMS}
+    if action == "word_count_by_paragraph":
+        paragraphs=[p for p in re.split(r"\\n\\s*\\n",value.strip()) if p.strip()]
+        return {"status":"succeeded","paragraphs":[{"index":i,"word_count":len(re.findall(r"\\S+",p)),"text":p[:1000]} for i,p in enumerate(paragraphs[:MAX_ITEMS],1)],"count":len(paragraphs)}
+    if action == "sentence_count":
+        sentences=[s for s in re.split(r"(?<=[.!?])\\s+",value.strip()) if s]
+        return {"status":"succeeded","sentence_count":len(sentences)}
+    if action == "count_punctuation":
+        return {"status":"succeeded","punctuation_count":sum(unicodedata.category(ch).startswith("P") for ch in value),"counts":dict(Counter(ch for ch in value if unicodedata.category(ch).startswith("P")).most_common(100))}
+    if action == "count_uppercase":
+        return {"status":"succeeded","uppercase_characters":sum(ch.isupper() for ch in value),"lowercase_characters":sum(ch.islower() for ch in value)}
+    if action == "count_digits":
+        return {"status":"succeeded","digit_count":sum(ch.isdigit() for ch in value),"digits":re.findall(r"\\d",value)[:MAX_ITEMS]}
+    if action in {"strip_accents","transliterate_ascii"}:
+        normalized=unicodedata.normalize("NFKD",value)
+        stripped="".join(ch for ch in normalized if not unicodedata.combining(ch))
+        if action=="transliterate_ascii": stripped=stripped.encode("ascii","ignore").decode("ascii")
+        return {"status":"succeeded","text":stripped[:MAX_TEXT]}
+    if action == "mask_digits":
+        return {"status":"succeeded","text":re.sub(r"\\d","*",value)}
+    if action == "mask_emails":
+        return {"status":"succeeded","text":re.sub(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}","[REDACTED_EMAIL]",value,flags=re.I)}
+    if action == "mask_phone_numbers":
+        return {"status":"succeeded","text":re.sub(r"(?<!\\w)\\+?\\d[\\d ().-]{6,}\\d(?!\\w)","[REDACTED_PHONE]",value)}
+    if action == "mask_credit_card_candidates":
+        return {"status":"succeeded","text":re.sub(r"(?<!\\d)(?:\\d[ -]?){13,19}(?!\\d)","[REDACTED_CARD_CANDIDATE]",value),"note":"Pattern-based masking; no card validity check is performed."}
+    if action == "extract_email_domains":
+        domains=re.findall(r"[A-Z0-9._%+-]+@([A-Z0-9.-]+\\.[A-Z]{2,})",value,re.I)
+        return {"status":"succeeded","domains":list(dict.fromkeys(x.lower() for x in domains))[:MAX_ITEMS]}
+    if action == "extract_urls_with_paths":
+        urls=re.findall(r"https?://[^\\s<>\\\"']+",value,re.I)
+        result=[]
+        for url in urls:
+            parsed=urlparse(url)
+            if parsed.hostname: result.append({"url":url,"host":parsed.hostname,"path":parsed.path,"query":parsed.query})
+        return {"status":"succeeded","urls":result[:MAX_ITEMS]}
+    if action == "extract_query_params":
+        urls=re.findall(r"https?://[^\\s<>\\\"']+",value,re.I)
+        results=[]
+        for url in urls:
+            parsed=urlparse(url)
+            if parsed.scheme in {"http","https"} and parsed.hostname: results.append({"url":url,"params":parse_qs(parsed.query)})
+        return {"status":"succeeded","urls":results[:MAX_ITEMS]}
+    if action == "url_join_preview":
+        base=step.get("base_url","")
+        if not isinstance(base,str) or urlparse(base).scheme not in {"http","https"} or not urlparse(base).hostname:
+            return {"status":"failed","message":"base_url must be an absolute HTTP/HTTPS URL."}
+        from urllib.parse import urljoin
+        return {"status":"succeeded","url":urljoin(base,value.strip())[:4000],"note":"Preview only; no network request is made."}
+    if action in {"format_json_compact","json_minify","json_sort_keys"}:
+        try: obj=json.loads(value)
+        except json.JSONDecodeError as exc: return {"status":"failed","message":f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        compact=action in {"format_json_compact","json_minify"}
+        result=json.dumps(obj,ensure_ascii=False,separators=(",",":") if compact else (",",": "),sort_keys=action=="json_sort_keys")
+        return {"status":"succeeded","json":result[:MAX_TEXT],"truncated":len(result)>MAX_TEXT}
+    if action in {"json_array_unique","json_array_length"}:
+        try: obj=json.loads(value)
+        except json.JSONDecodeError as exc: return {"status":"failed","message":f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        if not isinstance(obj,list): return {"status":"failed","message":"JSON root must be an array."}
+        if action=="json_array_length": return {"status":"succeeded","length":len(obj)}
+        unique=[];seen=set()
+        for item in obj:
+            key=json.dumps(item,sort_keys=True,ensure_ascii=False)
+            if key not in seen: seen.add(key);unique.append(item)
+        return {"status":"succeeded","items":unique[:MAX_ITEMS],"unique_count":len(unique),"original_count":len(obj)}
     return None
 
 

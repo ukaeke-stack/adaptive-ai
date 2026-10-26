@@ -686,7 +686,7 @@ def execute_extra(action, step, value):
         lo,hi=sorted((a,b));days=sum(1 for i in range((hi-lo).days) if (lo+timedelta(days=i)).weekday()<5)
         return {"status":"succeeded","business_days":days if b>=a else -days}
 
-    if action in {"json_merge_arrays","json_array_filter_contains","json_array_slice","json_object_pick","json_object_omit","json_object_rename_key","json_object_remove_key","json_object_get","json_object_set","json_object_to_pairs","json_pairs_to_object","json_escape_string","json_unescape_string","json_count_nodes","json_max_depth","json_extract_strings","json_extract_numbers","json_extract_booleans","json_extract_nulls","jsonl_to_json","json_to_jsonl","json_flatten","json_deep_merge","json_path_values","json_array_flatten","json_array_reverse","json_array_sort","sort_json_keys","json_pretty_print","json_compact_print"}:
+    if action in {"json_merge_arrays","json_pairs_to_object","json_array_filter_contains","json_array_slice","json_object_pick","json_object_omit","json_object_rename_key","json_object_remove_key","json_object_get","json_object_set","json_object_to_pairs","json_pairs_to_object","json_escape_string","json_unescape_string","json_count_nodes","json_max_depth","json_extract_strings","json_extract_numbers","json_extract_booleans","json_extract_nulls","jsonl_to_json","json_to_jsonl","json_flatten","json_deep_merge","json_path_values","json_array_flatten","json_array_reverse","json_array_sort","sort_json_keys","json_pretty_print","json_compact_print"}:
         if action=="json_escape_string": return {"status":"succeeded","json_string":json.dumps(value,ensure_ascii=False)}
         if action in {"jsonl_to_json","json_to_jsonl"}:
             if action=="jsonl_to_json":
@@ -717,6 +717,21 @@ def execute_extra(action, step, value):
                     return out
                 return b
             obj=deep_merge(obj,other)
+        if action=="json_deep_merge":
+            raw=step.get("second_input","")
+            try:other=json.loads(raw) if isinstance(raw,str) else raw
+            except json.JSONDecodeError:return {"status":"failed","message":"second_input must be valid JSON."}
+            if not isinstance(obj,dict) or not isinstance(other,dict):return {"status":"failed","message":"Both values must be objects."}
+            def deep_merge(a,b):
+                if isinstance(a,dict) and isinstance(b,dict):
+                    out=dict(a)
+                    for k,v in b.items():out[k]=deep_merge(out[k],v) if k in out else v
+                    return out
+                return b
+            obj=deep_merge(obj,other)
+        if action=="json_pairs_to_object":
+            if not isinstance(obj,list):return {"status":"failed","message":"JSON root must be an array."}
+            return {"status":"succeeded","object":{str(x["key"]):x["value"] for x in obj if isinstance(x,dict) and "key" in x and "value" in x}}
         if action=="json_merge_arrays":
             raw=step.get("second_input","")
             try:other=json.loads(raw) if isinstance(raw,str) else raw

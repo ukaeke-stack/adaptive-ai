@@ -61,6 +61,32 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Notes and to-do workspace</h3>
+  <p class="muted">Private account-scoped notes and tasks are stored in the backend. Search, edit and delete operations apply only to your account.</p>
+  <div class="row">
+    <div class="field"><label for="noteTitle">Note title</label><input id="noteTitle" maxlength="200" placeholder="Project notes"></div>
+    <div class="field"><label for="noteTags">Tags (comma-separated)</label><input id="noteTags" maxlength="500" placeholder="work, ideas"></div>
+  </div>
+  <div class="field"><label for="noteBody">Note content</label><textarea id="noteBody" maxlength="100000" rows="3" placeholder="Write a note…"></textarea></div>
+  <div class="actions"><button id="saveNote" type="button">Save note</button><button id="refreshNotes" type="button" class="ghost">Refresh notes</button></div>
+  <div class="field"><label for="noteSearch">Search notes</label><input id="noteSearch" maxlength="200" placeholder="Search title or content"></div>
+  <div id="noteList" class="task-list"></div>
+  <div class="divider" style="height:1px;background:#29425d;margin:16px 0"></div>
+  <div class="row">
+    <div class="field"><label for="todoTitle">To-do title</label><input id="todoTitle" maxlength="200" placeholder="Prepare meeting notes"></div>
+    <div class="field"><label for="todoPriority">Priority</label><select id="todoPriority"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+  </div>
+  <div class="field"><label for="todoDescription">Description</label><textarea id="todoDescription" maxlength="4000" rows="2" placeholder="Optional details"></textarea></div>
+  <div class="row">
+    <div class="field"><label for="todoDue">Due date/time (optional)</label><input id="todoDue" type="datetime-local"></div>
+    <div class="field"><label for="todoFilter">Show tasks</label><select id="todoFilter"><option value="all">All</option><option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option><option value="cancelled">Cancelled</option></select></div>
+  </div>
+  <div class="actions"><button id="saveTodo" type="button">Add to-do</button><button id="refreshTodos" type="button" class="ghost">Refresh to-dos</button></div>
+  <div class="status" id="workspaceStatus" role="status" aria-live="polite">Sign in to use notes and to-dos.</div>
+  <div id="todoList" class="task-list"></div>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Speech and language controls</h3>
   <p class="muted">These controls use Android's native speech services when this page is open inside Norah. Availability depends on the language packs installed on the phone.</p>
   <div class="row">
@@ -154,6 +180,63 @@ $("ocrImage").addEventListener("click",processImageOcr);
 
 document.querySelectorAll("[data-native]").forEach(button=>button.addEventListener("click",()=>{const action=button.dataset.native;const status=$("deviceStatus");const bridge=window.AdaptiveDevice;if(!bridge||typeof bridge[action]!=="function"){status.textContent="This action is only available inside the Norah Android app. No device action was performed.";status.classList.add("error");return}try{let result;if(action==="openMaps"||action==="searchWeb")result=bridge[action]($("deviceQuery").value.trim());else if(action==="shareText")result=bridge[action]($("deviceShareText").value.trim());else result=bridge[action]();status.textContent=result===false?"Android could not open the requested app or settings. Check whether a compatible app is installed.":"Android accepted the request. Complete any remaining steps in the opened system app.";status.classList.toggle("error",result===false)}catch(e){status.textContent="Android action failed: "+e.message;status.classList.add("error")}}));
 async function runResearch(){const query=$("researchQuery").value.trim();const status=$("researchStatus");const results=$("researchResults");results.replaceChildren();if(!authenticated){status.textContent="Sign in on the main Norah page before searching.";status.classList.add("error");return}if(query.length<2){status.textContent="Enter a research question with at least two characters.";status.classList.add("error");return}const button=$("researchSearch");button.disabled=true;status.textContent="Checking research provider and searching…";status.classList.remove("error");try{const config=await api("/v1/research/status");if(!config.configured)throw new Error("Web research is not configured. The service administrator must set TAVILY_API_KEY.");const data=await api("/v1/research/search",{method:"POST",body:JSON.stringify({query,max_results:Number($("researchLimit").value)})});status.textContent="Found "+data.result_count+" result(s) for: "+data.query;for(const item of data.results||[]){const card=document.createElement("article");card.className="task";const link=document.createElement("a");link.href=item.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent=item.title||item.url;const snippet=document.createElement("p");snippet.className="muted";snippet.textContent=item.snippet||"No snippet available.";const url=document.createElement("div");url.className="muted";url.textContent=item.url;card.append(link,snippet,url);results.append(card)}if(!data.result_count)status.textContent+=" No safe HTTP/HTTPS results were returned."}catch(e){status.textContent=e.message;status.classList.add("error")}finally{button.disabled=false}}
+async function loadNotes(){
+  const list=$("noteList"), status=$("workspaceStatus");
+  try{
+    const data=await api("/v1/workspace/notes?q="+encodeURIComponent($("noteSearch").value.trim()));
+    list.replaceChildren();
+    for(const note of (data.notes||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=note.title;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent=(note.tags||[]).join(", ")+" · updated "+new Date(note.updated_at).toLocaleString();
+      const body=document.createElement("pre");body.textContent=note.body;
+      const actions=document.createElement("div");actions.className="task-actions";
+      const edit=document.createElement("button");edit.className="ghost";edit.textContent="Edit";
+      edit.addEventListener("click",async()=>{const titleValue=prompt("Edit note title",note.title);if(titleValue===null)return;const bodyValue=prompt("Edit note content",note.body);if(bodyValue===null)return;try{await api("/v1/workspace/notes/"+encodeURIComponent(note.id),{method:"PATCH",body:JSON.stringify({title:titleValue,body:bodyValue})});await loadNotes()}catch(e){status.textContent=e.message}});
+      const remove=document.createElement("button");remove.className="ghost";remove.textContent="Delete";
+      remove.addEventListener("click",async()=>{if(!confirm("Delete this note?"))return;try{await api("/v1/workspace/notes/"+encodeURIComponent(note.id),{method:"DELETE",body:"{}"});await loadNotes()}catch(e){status.textContent=e.message}});
+      actions.append(edit,remove);card.append(title,meta,body,actions);list.append(card);
+    }
+  }catch(e){status.textContent=e.message}
+}
+async function loadTodos(){
+  const list=$("todoList"), status=$("workspaceStatus");
+  try{
+    const data=await api("/v1/workspace/todos?status="+encodeURIComponent($("todoFilter").value));
+    list.replaceChildren();
+    for(const todo of (data.todos||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=todo.title;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent=todo.status+" · "+todo.priority+" · due "+(todo.due_at||"not set");
+      const body=document.createElement("p");body.textContent=todo.description||"";
+      const actions=document.createElement("div");actions.className="task-actions";
+      const next=document.createElement("button");next.textContent=todo.status==="done"?"Reopen":"Mark done";
+      next.addEventListener("click",async()=>{try{await api("/v1/workspace/todos/"+encodeURIComponent(todo.id),{method:"PATCH",body:JSON.stringify({status:todo.status==="done"?"open":"done"})});await loadTodos()}catch(e){status.textContent=e.message}});
+      const remove=document.createElement("button");remove.className="ghost";remove.textContent="Delete";
+      remove.addEventListener("click",async()=>{if(!confirm("Delete this to-do?"))return;try{await api("/v1/workspace/todos/"+encodeURIComponent(todo.id),{method:"DELETE",body:"{}"});await loadTodos()}catch(e){status.textContent=e.message}});
+      actions.append(next,remove);card.append(title,meta,body,actions);list.append(card);
+    }
+    status.textContent=(data.todos||[]).length+" to-do item(s) loaded.";
+  }catch(e){status.textContent=e.message}
+}
+$("saveNote").addEventListener("click",async()=>{
+  const status=$("workspaceStatus");
+  try{const title=$("noteTitle").value.trim();if(!title)throw new Error("Enter a note title.");
+    const tags=$("noteTags").value.split(",").map(x=>x.trim()).filter(Boolean);
+    await api("/v1/workspace/notes",{method:"POST",body:JSON.stringify({title,body:$("noteBody").value,tags})});
+    $("noteTitle").value="";$("noteBody").value="";$("noteTags").value="";status.textContent="Note saved.";await loadNotes();
+  }catch(e){status.textContent=e.message}
+});
+$("saveTodo").addEventListener("click",async()=>{
+  const status=$("workspaceStatus");
+  try{const title=$("todoTitle").value.trim();if(!title)throw new Error("Enter a to-do title.");
+    const local=$("todoDue").value;const due=local?new Date(local).toISOString():null;
+    await api("/v1/workspace/todos",{method:"POST",body:JSON.stringify({title,description:$("todoDescription").value,due_at:due,priority:$("todoPriority").value})});
+    $("todoTitle").value="";$("todoDescription").value="";$("todoDue").value="";status.textContent="To-do saved.";await loadTodos();
+  }catch(e){status.textContent=e.message}
+});
+$("refreshNotes").addEventListener("click",loadNotes);$("refreshTodos").addEventListener("click",loadTodos);
+$("noteSearch").addEventListener("change",loadNotes);$("todoFilter").addEventListener("change",loadTodos);
 const nativeSpeech=()=>window.AdaptiveNative;
 $("applyVoiceSettings").addEventListener("click",()=>{
   const bridge=nativeSpeech(), status=$("voiceStatus");
@@ -245,7 +328,7 @@ $("saveAutomation").addEventListener("click",async()=>{
 $("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos()})();
 </script>
 </body>
 </html>

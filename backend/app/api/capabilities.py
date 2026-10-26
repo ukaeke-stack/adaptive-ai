@@ -43,6 +43,7 @@ _AGENT_DESCRIPTIONS = {
     "extract_mentions": "Extract @mentions from supplied text.",
     "reverse_lines": "Reverse the order of supplied lines.",
     "trim_lines": "Trim leading and trailing whitespace from each line.",
+    "normalize_whitespace": "Collapse repeated whitespace into single spaces.",
 }
 
 

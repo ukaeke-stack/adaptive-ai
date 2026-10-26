@@ -137,3 +137,63 @@ def test_extract_json_objects_ignores_unbalanced_and_non_object_braces():
     assert result["count"] == 1
     assert result["objects"] == ['{"valid": 1}']
 
+def test_financial_calculators_reject_non_finite_and_invalid_ranges():
+    from app.tools.builtin.text_tools import execute_extended
+
+    non_finite = execute_extended({
+        "action": "calculate_compound_interest",
+        "input": "",
+        "amount": 1000,
+        "rate": float("nan"),
+        "years": 2,
+    })
+    impossible_compound = execute_extended({
+        "action": "calculate_compound_interest",
+        "input": "",
+        "amount": 1000,
+        "rate": -101,
+        "years": 2,
+    })
+    invalid_loan_term = execute_extended({
+        "action": "calculate_loan_payment",
+        "input": "",
+        "amount": 1000,
+        "rate": 5,
+        "months": 0,
+    })
+    oversized_loan_term = execute_extended({
+        "action": "calculate_loan_payment",
+        "input": "",
+        "amount": 1000,
+        "rate": 5,
+        "months": 1201,
+    })
+
+    assert non_finite["status"] == "failed"
+    assert "finite" in non_finite["message"].lower()
+    assert impossible_compound["status"] == "failed"
+    assert invalid_loan_term["status"] == "failed"
+    assert oversized_loan_term["status"] == "failed"
+
+
+def test_financial_calculators_keep_valid_zero_interest_results():
+    from app.tools.builtin.text_tools import execute_extended
+
+    compound = execute_extended({
+        "action": "calculate_compound_interest",
+        "input": "",
+        "amount": 1000,
+        "rate": 0,
+        "years": 3,
+    })
+    loan = execute_extended({
+        "action": "calculate_loan_payment",
+        "input": "",
+        "amount": 1200,
+        "rate": 0,
+        "months": 12,
+    })
+
+    assert compound == {"status": "succeeded", "result": 0.0}
+    assert loan == {"status": "succeeded", "result": 100.0}
+

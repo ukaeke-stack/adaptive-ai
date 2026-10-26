@@ -151,6 +151,15 @@ class AndroidDeviceActions(private val context: Context) {
             "No maps application is available.")
     }
 
+    /** Opens a validated HTTP/HTTPS URL in the browser after the user taps the action. */
+    @JavascriptInterface
+    fun openUrl(url: String?): Boolean {
+        val safe = url?.trim()?.take(2000).orEmpty()
+        val parsed = Uri.parse(safe)
+        if (parsed.scheme !in setOf("http", "https") || parsed.host.isNullOrBlank()) return false
+        return launch(Intent(Intent.ACTION_VIEW, parsed), "No browser is available.")
+    }
+
     /** Opens a web search in an installed browser; it does not submit private app data. */
     @JavascriptInterface
     fun searchWeb(query: String?): Boolean {

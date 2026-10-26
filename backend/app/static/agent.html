@@ -369,8 +369,8 @@ $("refreshSocial").addEventListener("click",loadSocial);
 async function loadDirectTools(){
   const select=$("directToolName"),status=$("directToolStatus");
   try{
-    const data=await api("/v1/capabilities");select.replaceChildren();
-    for(const tool of (data.capabilities||[])){
+    const data=await api("/v1/tools");select.replaceChildren();
+    for(const tool of (data.tools||[])){
       if(tool.status!=="implemented")continue;
       const option=document.createElement("option");option.value=tool.name;option.textContent=tool.name+" — "+(tool.description||"");select.append(option);
     }

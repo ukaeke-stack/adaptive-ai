@@ -61,6 +61,14 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Connected social accounts</h3>
+  <p class="muted">Connect Instagram, Facebook, X, YouTube or TikTok using provider OAuth. Tokens remain encrypted on the server. Posting and publishing are not enabled by this panel.</p>
+  <div class="actions"><button id="refreshSocial" type="button" class="ghost">Refresh connections</button></div>
+  <div class="status" id="socialStatus" role="status" aria-live="polite">Sign in to view provider connection status.</div>
+  <div id="socialList" class="task-list"></div>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Scheduled automations</h3>
   <p class="muted">Schedule a registered bounded local action. Runs are recorded with retry outcomes. This does not send messages, publish content, or perform financial transactions.</p>
   <div class="row">
@@ -130,6 +138,34 @@ $("ocrImage").addEventListener("click",processImageOcr);
 
 document.querySelectorAll("[data-native]").forEach(button=>button.addEventListener("click",()=>{const action=button.dataset.native;const status=$("deviceStatus");const bridge=window.AdaptiveDevice;if(!bridge||typeof bridge[action]!=="function"){status.textContent="This action is only available inside the Norah Android app. No device action was performed.";status.classList.add("error");return}try{let result;if(action==="openMaps"||action==="searchWeb")result=bridge[action]($("deviceQuery").value.trim());else if(action==="shareText")result=bridge[action]($("deviceShareText").value.trim());else result=bridge[action]();status.textContent=result===false?"Android could not open the requested app or settings. Check whether a compatible app is installed.":"Android accepted the request. Complete any remaining steps in the opened system app.";status.classList.toggle("error",result===false)}catch(e){status.textContent="Android action failed: "+e.message;status.classList.add("error")}}));
 async function runResearch(){const query=$("researchQuery").value.trim();const status=$("researchStatus");const results=$("researchResults");results.replaceChildren();if(!authenticated){status.textContent="Sign in on the main Norah page before searching.";status.classList.add("error");return}if(query.length<2){status.textContent="Enter a research question with at least two characters.";status.classList.add("error");return}const button=$("researchSearch");button.disabled=true;status.textContent="Checking research provider and searching…";status.classList.remove("error");try{const config=await api("/v1/research/status");if(!config.configured)throw new Error("Web research is not configured. The service administrator must set TAVILY_API_KEY.");const data=await api("/v1/research/search",{method:"POST",body:JSON.stringify({query,max_results:Number($("researchLimit").value)})});status.textContent="Found "+data.result_count+" result(s) for: "+data.query;for(const item of data.results||[]){const card=document.createElement("article");card.className="task";const link=document.createElement("a");link.href=item.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent=item.title||item.url;const snippet=document.createElement("p");snippet.className="muted";snippet.textContent=item.snippet||"No snippet available.";const url=document.createElement("div");url.className="muted";url.textContent=item.url;card.append(link,snippet,url);results.append(card)}if(!data.result_count)status.textContent+=" No safe HTTP/HTTPS results were returned."}catch(e){status.textContent=e.message;status.classList.add("error")}finally{button.disabled=false}}
+async function loadSocial(){
+  const status=$("socialStatus"), list=$("socialList");
+  try{
+    const data=await api("/v1/social/providers");
+    list.replaceChildren();
+    for(const provider of (data.providers||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=provider.provider.toUpperCase();
+      const meta=document.createElement("p");meta.className="muted";meta.textContent="Status: "+provider.status+" · "+(provider.configured?"credentials configured":"provider credentials required");
+      const actions=document.createElement("div");actions.className="task-actions";
+      if(!provider.connected){
+        const connect=document.createElement("button");connect.textContent="Connect";
+        connect.disabled=!provider.configured;
+        connect.addEventListener("click",()=>{window.location.assign("/v1/social/"+encodeURIComponent(provider.provider)+"/connect")});
+        actions.append(connect);
+      }else{
+        const profile=document.createElement("button");profile.className="ghost";profile.textContent="View profile";
+        profile.addEventListener("click",async()=>{try{const result=await api("/v1/social/"+encodeURIComponent(provider.provider)+"/profile");meta.textContent="Connected profile: "+pretty(result.profile)}catch(e){status.textContent=e.message}});
+        const disconnect=document.createElement("button");disconnect.className="ghost";disconnect.textContent="Disconnect";
+        disconnect.addEventListener("click",async()=>{if(!confirm("Delete Norah's stored token for "+provider.provider+"?"))return;try{await api("/v1/social/"+encodeURIComponent(provider.provider)+"/disconnect",{method:"DELETE",body:"{}"});await loadSocial()}catch(e){status.textContent=e.message}});
+        actions.append(profile,disconnect);
+      }
+      card.append(title,meta,actions);list.append(card);
+    }
+    status.textContent=(data.providers||[]).length+" provider(s) loaded. OAuth requires credentials configured by the service administrator.";
+  }catch(e){status.textContent=e.message}
+}
+$("refreshSocial").addEventListener("click",loadSocial);
 async function loadAutomations(){
   const status=$("automationStatus"), list=$("automationList");
   try{
@@ -176,7 +212,7 @@ $("saveAutomation").addEventListener("click",async()=>{
 $("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks();await loadAutomations()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial()})();
 </script>
 </body>
 </html>

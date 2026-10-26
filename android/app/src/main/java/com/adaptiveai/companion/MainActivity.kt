@@ -2,6 +2,7 @@ package com.adaptiveai.companion
 
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -22,6 +23,7 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private var pendingMediaPermission: android.webkit.PermissionRequest? = null
     private var pendingFileChooser: ValueCallback<Array<Uri>>? = null
+    private var pendingCaptureUri: Uri? = null
     private lateinit var speechBridge: AndroidSpeechBridge
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +51,36 @@ class MainActivity : Activity() {
                     pendingFileChooser = filePathCallback
                     val acceptedType = fileChooserParams?.acceptTypes?.firstOrNull { it.isNotBlank() && it != "*/*" }
                         ?: "application/pdf"
+                    if (fileChooserParams?.isCaptureEnabled == true &&
+                        (acceptedType.startsWith("image/") || acceptedType.startsWith("video/"))) {
+                        val isVideo = acceptedType.startsWith("video/")
+                        val collection = if (isVideo) android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                            else android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                        val values = ContentValues().apply {
+                            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                                "norah_capture_" + System.currentTimeMillis() + if (isVideo) ".mp4" else ".jpg")
+                            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, if (isVideo) "video/mp4" else "image/jpeg")
+                            if (Build.VERSION.SDK_INT >= 29) put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                                if (isVideo) "Movies/Norah" else "Pictures/Norah")
+                        }
+                        val output = contentResolver.insert(collection, values)
+                        if (output != null) {
+                            val capture = Intent(if (isVideo) android.provider.MediaStore.ACTION_VIDEO_CAPTURE
+                                else android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, output)
+                            try {
+                                pendingCaptureUri = output
+                                startActivityForResult(capture, 906)
+                                return true
+                            } catch (_: android.content.ActivityNotFoundException) {
+                                contentResolver.delete(output, null, null)
+                                pendingCaptureUri = null
+                                Toast.makeText(this@MainActivity, "No camera application is available.", Toast.LENGTH_LONG).show()
+                                pendingFileChooser?.onReceiveValue(null)
+                                pendingFileChooser = null
+                                return false
+                            }
+                        }
+                    }
                     val pick = Intent(Intent.ACTION_GET_CONTENT).apply {
                         type = acceptedType
                         addCategory(Intent.CATEGORY_OPENABLE)
@@ -118,6 +150,19 @@ class MainActivity : Activity() {
             pendingFileChooser = null
             val uri = if (resultCode == RESULT_OK) data?.data else null
             callback?.onReceiveValue(if (uri != null) arrayOf(uri) else null)
+            return
+        }
+        if (requestCode == 906) {
+            val callback = pendingFileChooser
+            pendingFileChooser = null
+            val uri = pendingCaptureUri
+            pendingCaptureUri = null
+            if (resultCode == RESULT_OK && uri != null) {
+                callback?.onReceiveValue(arrayOf(uri))
+            } else {
+                if (uri != null) contentResolver.delete(uri, null, null)
+                callback?.onReceiveValue(null)
+            }
             return
         }
         if (requestCode == 901 && Settings.canDrawOverlays(this)) startRobotService()

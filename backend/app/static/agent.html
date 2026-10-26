@@ -58,6 +58,27 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Scheduled automations</h3>
+  <p class="muted">Schedule a registered bounded local action. Runs are recorded with retry outcomes. This does not send messages, publish content, or perform financial transactions.</p>
+  <div class="row">
+    <div class="field"><label for="automationName">Automation name</label><input id="automationName" maxlength="120" placeholder="Daily document summary"></div>
+    <div class="field"><label for="automationAction">Action</label><select id="automationAction"><option value="">Loading registered actions…</option></select></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="automationInterval">Repeat interval (minutes, 1–525600)</label><input id="automationInterval" type="number" min="1" max="525600" value="1440"></div>
+    <div class="field"><label for="automationNext">First run time</label><input id="automationNext" type="datetime-local"></div>
+  </div>
+  <div class="field"><label for="automationArgs">Action arguments (JSON)</label><textarea id="automationArgs" maxlength="120000" rows="4">{ "input": "Add text to process" }</textarea></div>
+  <div class="row">
+    <div class="field"><label for="automationRetries">Maximum retries (0–5)</label><input id="automationRetries" type="number" min="0" max="5" value="2"></div>
+    <div class="field"><label>Execution history</label><button id="refreshAutomations" type="button" class="ghost">Refresh automations</button></div>
+  </div>
+  <div class="actions"><button id="saveAutomation" type="button">Save scheduled automation</button></div>
+  <div class="status" id="automationStatus" role="status" aria-live="polite">Sign in to manage scheduled automations.</div>
+  <div id="automationList" class="task-list"></div>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Android device actions</h3>
   <p class="muted">These buttons use the native Android bridge when opened inside the Norah Android app. On a regular browser, device-specific actions are unavailable. Android opens the relevant system app for you to review; it does not silently send messages or place calls.</p>
   <div class="row">
@@ -89,9 +110,53 @@ async function processPdf(ocr){if(!authenticated){$("pdfStatus").textContent="Si
 $("extractPdf").addEventListener("click",()=>processPdf(false));$("ocrPdf").addEventListener("click",()=>processPdf(true));
 document.querySelectorAll("[data-native]").forEach(button=>button.addEventListener("click",()=>{const action=button.dataset.native;const status=$("deviceStatus");const bridge=window.AdaptiveDevice;if(!bridge||typeof bridge[action]!=="function"){status.textContent="This action is only available inside the Norah Android app. No device action was performed.";status.classList.add("error");return}try{let result;if(action==="openMaps"||action==="searchWeb")result=bridge[action]($("deviceQuery").value.trim());else if(action==="shareText")result=bridge[action]($("deviceShareText").value.trim());else result=bridge[action]();status.textContent=result===false?"Android could not open the requested app or settings. Check whether a compatible app is installed.":"Android accepted the request. Complete any remaining steps in the opened system app.";status.classList.toggle("error",result===false)}catch(e){status.textContent="Android action failed: "+e.message;status.classList.add("error")}}));
 async function runResearch(){const query=$("researchQuery").value.trim();const status=$("researchStatus");const results=$("researchResults");results.replaceChildren();if(!authenticated){status.textContent="Sign in on the main Norah page before searching.";status.classList.add("error");return}if(query.length<2){status.textContent="Enter a research question with at least two characters.";status.classList.add("error");return}const button=$("researchSearch");button.disabled=true;status.textContent="Checking research provider and searching…";status.classList.remove("error");try{const config=await api("/v1/research/status");if(!config.configured)throw new Error("Web research is not configured. The service administrator must set TAVILY_API_KEY.");const data=await api("/v1/research/search",{method:"POST",body:JSON.stringify({query,max_results:Number($("researchLimit").value)})});status.textContent="Found "+data.result_count+" result(s) for: "+data.query;for(const item of data.results||[]){const card=document.createElement("article");card.className="task";const link=document.createElement("a");link.href=item.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent=item.title||item.url;const snippet=document.createElement("p");snippet.className="muted";snippet.textContent=item.snippet||"No snippet available.";const url=document.createElement("div");url.className="muted";url.textContent=item.url;card.append(link,snippet,url);results.append(card)}if(!data.result_count)status.textContent+=" No safe HTTP/HTTPS results were returned."}catch(e){status.textContent=e.message;status.classList.add("error")}finally{button.disabled=false}}
+async function loadAutomations(){
+  const status=$("automationStatus"), list=$("automationList");
+  try{
+    const caps=await api("/v1/capabilities");
+    const select=$("automationAction");
+    select.replaceChildren();
+    for(const tool of (caps.capabilities||[])){
+      if(tool.status!=="implemented")continue;
+      const option=document.createElement("option"); option.value=tool.name; option.textContent=tool.name+" — "+(tool.description||""); select.append(option);
+    }
+    const data=await api("/v1/automations");
+    list.replaceChildren();
+    for(const item of (data.automations||[])){
+      const card=document.createElement("article"); card.className="task";
+      const title=document.createElement("h4"); title.textContent=item.name+" ("+item.action+")";
+      const meta=document.createElement("p"); meta.className="muted"; meta.textContent="Status: "+item.last_status+" · "+(item.enabled?"enabled":"paused")+" · next run "+item.next_run_at;
+      const pre=document.createElement("pre"); pre.textContent=pretty(item.input);
+      const actions=document.createElement("div"); actions.className="task-actions";
+      const toggle=document.createElement("button"); toggle.className="ghost"; toggle.textContent=item.enabled?"Pause":"Enable";
+      toggle.addEventListener("click",async()=>{try{await api("/v1/automations/"+encodeURIComponent(item.id),{method:"PATCH",body:JSON.stringify({enabled:!item.enabled})});await loadAutomations()}catch(e){status.textContent=e.message}});
+      const history=document.createElement("button"); history.className="ghost"; history.textContent="View runs";
+      history.addEventListener("click",async()=>{try{const runs=await api("/v1/automations/"+encodeURIComponent(item.id)+"/runs");pre.textContent=pretty(runs.runs)}catch(e){status.textContent=e.message}});
+      const remove=document.createElement("button"); remove.className="ghost"; remove.textContent="Delete";
+      remove.addEventListener("click",async()=>{if(!confirm("Delete this automation and its run history?"))return;try{await api("/v1/automations/"+encodeURIComponent(item.id),{method:"DELETE",body:"{}"});await loadAutomations()}catch(e){status.textContent=e.message}});
+      actions.append(toggle,history,remove); card.append(title,meta,pre,actions); list.append(card);
+    }
+    status.textContent=(data.automations||[]).length+" automation(s) loaded.";
+  }catch(e){status.textContent=e.message}
+}
+$("saveAutomation").addEventListener("click",async()=>{
+  const status=$("automationStatus");
+  try{
+    const name=$("automationName").value.trim(), action=$("automationAction").value;
+    const minutes=Number($("automationInterval").value), retries=Number($("automationRetries").value);
+    const local=$("automationNext").value;
+    if(!name||!action||!local)throw new Error("Enter a name, action and first run time.");
+    let args; try{args=JSON.parse($("automationArgs").value||"{}")}catch(_){throw new Error("Action arguments must be valid JSON.")}
+    if(!args||Array.isArray(args)||typeof args!=="object")throw new Error("Action arguments must be a JSON object.");
+    const next=new Date(local); if(!Number.isFinite(next.getTime())||next.getTime()<=Date.now())throw new Error("Choose a future first run time.");
+    await api("/v1/automations",{method:"POST",body:JSON.stringify({name,action,input:args,interval_seconds:Math.round(minutes*60),next_run_at:next.toISOString(),max_retries:retries})});
+    status.textContent="Automation saved."; await loadAutomations();
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+$("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations()})();
 </script>
 </body>
 </html>

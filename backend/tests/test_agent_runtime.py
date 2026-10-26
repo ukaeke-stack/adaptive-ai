@@ -83,3 +83,19 @@ def test_agent_workspace_is_served():
     assert "Norah Agent Desk" in response.text
     assert 'id="extractPdf"' in response.text
     assert 'id="ocrPdf"' in response.text
+
+
+
+def test_agent_plans_multiple_supported_actions_in_order():
+    plan = _plan("Count words and extract contacts", {
+        "text": "Contact test@example.com. One two three."
+    })
+    assert [step["action"] for step in plan] == ["count_words", "extract_contacts"]
+    assert [step["id"] for step in plan] == ["step-1", "step-2"]
+    assert all(step["input"] == "Contact test@example.com. One two three." for step in plan)
+
+
+def test_agent_does_not_partially_plan_mixed_unsupported_goals():
+    plan = _plan("Count words and send money to my supplier", {"text": "one two"})
+    assert len(plan) == 1
+    assert plan[0]["action"] == "unsupported_goal"

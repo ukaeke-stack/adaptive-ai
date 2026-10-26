@@ -212,7 +212,7 @@ async function loadReminders(){
       const meta=document.createElement("p");meta.className="muted";meta.textContent=reminder.status+" · due "+(reminder.due_at||"not set");
       const body=document.createElement("p");body.textContent=reminder.notes||"";
       const actions=document.createElement("div");actions.className="task-actions";
-      for(const state of ["completed","cancelled"]){const button=document.createElement("button");button.className="ghost";button.textContent=state==="completed"?"Complete":"Cancel";button.addEventListener("click",async()=>{try{await api("/v1/assistant/reminders/"+encodeURIComponent(reminder.id)+"?status="+state,{method:"PATCH",body:"{}"});await loadReminders()}catch(e){status.textContent=e.message}});actions.append(button)}
+      for(const state of ["completed","cancelled"]){const button=document.createElement("button");button.className="ghost";button.textContent=state==="completed"?"Complete":"Cancel";button.addEventListener("click",async()=>{try{await api("/v1/assistant/reminders/"+encodeURIComponent(reminder.id)+"?status="+state,{method:"PATCH",body:"{}"});const bridge=window.AdaptiveDevice;if(bridge&&typeof bridge.cancelReminder==="function")bridge.cancelReminder(reminder.id);await loadReminders()}catch(e){status.textContent=e.message}});actions.append(button)}
       const remove=document.createElement("button");remove.className="ghost";remove.textContent="Delete";remove.addEventListener("click",async()=>{if(!confirm("Delete this reminder?"))return;try{await api("/v1/assistant/reminders/"+encodeURIComponent(reminder.id),{method:"DELETE",body:"{}"});await loadReminders()}catch(e){status.textContent=e.message}});
       actions.append(remove);card.append(title,meta,body,actions);list.append(card);
     }
@@ -222,8 +222,9 @@ $("saveReminder").addEventListener("click",async()=>{
   const status=$("workspaceStatus");
   try{const title=$("reminderName").value.trim();if(!title)throw new Error("Enter a reminder title.");
     const local=$("reminderDue").value;const due=local?new Date(local).toISOString():null;
-    await api("/v1/assistant/reminders",{method:"POST",body:JSON.stringify({title,due_at:due,notes:$("reminderNotes").value})});
-    $("reminderName").value="";$("reminderDue").value="";$("reminderNotes").value="";status.textContent="Reminder saved. For Android notifications, use the task-run reminder flow or configure the device notification permission.";await loadReminders();
+    const saved=await api("/v1/assistant/reminders",{method:"POST",body:JSON.stringify({title,due_at:due,notes:$("reminderNotes").value})});
+    let notification="";const bridge=window.AdaptiveDevice;if(due&&saved.reminder&&bridge&&typeof bridge.scheduleReminder==="function"){const ok=bridge.scheduleReminder(saved.reminder.id,title,new Date(due).getTime());notification=ok?" Local Android notification scheduled.":" Reminder saved, but Android notification could not be scheduled; check permission and date."}
+    $("reminderName").value="";$("reminderDue").value="";$("reminderNotes").value="";status.textContent="Reminder saved."+notification;await loadReminders();
   }catch(e){status.textContent=e.message}
 });
 $("refreshReminders").addEventListener("click",loadReminders);

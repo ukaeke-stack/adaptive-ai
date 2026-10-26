@@ -51,6 +51,12 @@ class TodoCreate(BaseModel):
     due_at: str | None = Field(default=None, max_length=64)
     priority: str = Field(default="normal", pattern="^(low|normal|high|urgent)$")
 
+class WorkspaceImport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    notes: list[NoteCreate] = Field(default_factory=list, max_length=200)
+    todos: list[TodoCreate] = Field(default_factory=list, max_length=200)
+
+
 class TodoUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str | None = Field(default=None, min_length=1, max_length=200)
@@ -201,3 +207,35 @@ def export_workspace(request: Request, format: str = "json"):
         writer.writerow([safe_cell(x) for x in ["todo",todo["id"],todo["title"],todo["description"],"",todo["due_at"],todo["priority"],todo["status"],todo["created_at"],todo["updated_at"]]])
     return Response(content=output.getvalue(),media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition":'attachment; filename="norah-workspace-export.csv"'})
+
+
+@router.post("/import")
+def import_workspace(body: WorkspaceImport, request: Request):
+    """Import a bounded JSON backup into the signed-in account without overwriting existing records."""
+    user=require_user(request); _tables()
+    now=_now(); inserted_notes=[]; inserted_todos=[]
+    with _ready_engine().begin() as conn:
+        for item in body.notes:
+            note_id=str(uuid4()); tags=_tags(item.tags)
+            conn.execute(text("""INSERT INTO adaptive_notes
+                (id,user_id,title,body,tags_json,created_at,updated_at)
+                VALUES (:id,:uid,:title,:body,:tags,:created,:updated)"""),
+                {"id":note_id,"uid":user["id"],"title":item.title.strip(),"body":item.body,
+                 "tags":json.dumps(tags),"created":now,"updated":now})
+            inserted_notes.append(note_id)
+        for item in body.todos:
+            if item.due_at:
+                try:
+                    dt=datetime.fromisoformat(item.due_at.replace("Z","+00:00"))
+                    if dt.tzinfo is None: raise ValueError()
+                except ValueError as exc: raise HTTPException(status_code=422,detail="Every imported due_at must be ISO-8601 with timezone.") from exc
+            todo_id=str(uuid4())
+            conn.execute(text("""INSERT INTO adaptive_todos
+                (id,user_id,title,description,due_at,priority,status,created_at,updated_at)
+                VALUES (:id,:uid,:title,:description,:due,:priority,'open',:created,:updated)"""),
+                {"id":todo_id,"uid":user["id"],"title":item.title.strip(),"description":item.description,
+                 "due":item.due_at,"priority":item.priority,"created":now,"updated":now})
+            inserted_todos.append(todo_id)
+    return {"imported":{"notes":len(inserted_notes),"todos":len(inserted_todos)},
+            "note_ids":inserted_notes,"todo_ids":inserted_todos,
+            "message":"Backup imported as new records. Existing records were not overwritten."}

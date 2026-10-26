@@ -247,7 +247,10 @@ def _calculate(expression: str) -> float | int:
 
 def _execute_step(step: dict) -> dict:
     action = step.get("action")
-    extended_result = execute_extended(step)
+    try:
+        extended_result = execute_extended(step)
+    except (ValueError, TypeError, KeyError) as exc:
+        return {"status": "failed", "message": str(exc)}
     if extended_result is not None:
         return extended_result
     if action in TEXT_ACTIONS:

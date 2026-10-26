@@ -1069,7 +1069,7 @@ def execute_extended(step: dict) -> dict | None:
         return {"status":"succeeded","parameters":list(dict.fromkeys(flat))[:MAX_ITEMS]}
     if action == "extract_api_endpoints":
         paths=re.findall(r"(?i)\\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\\s+(/[^\\s\"'<>]+)",value)
-        return {"status":"succeeded","endpoints":[{"method":m.upper(),"path":p} for m,p in paths[:MAX_ITEMS]}
+        return {"status":"succeeded","endpoints":[{"method":m.upper(),"path":p} for m,p in paths[:MAX_ITEMS]]}
     if action == "extract_env_variable_names":
         names=re.findall(r"(?m)^\\s*(?:export\\s+)?([A-Z_][A-Z0-9_]*)\\s*=",value)
         return {"status":"succeeded","variables":list(dict.fromkeys(names))[:MAX_ITEMS]}
@@ -1121,7 +1121,8 @@ def execute_extended(step: dict) -> dict | None:
         merged = {**left, **right}
         rendered = json.dumps(merged, ensure_ascii=False, indent=2)
         return {"status":"succeeded","json":rendered[:MAX_TEXT],"keys":len(merged),"note":"Shallow merge; values in second_input replace matching first-object keys."}
-    return None
+    from app.tools.builtin.extra_actions import execute_extra
+    return execute_extra(action, step, value)
 
 
 # Additional bounded productivity actions.

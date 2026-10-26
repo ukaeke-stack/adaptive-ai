@@ -943,7 +943,20 @@ def execute_extra(action, step, value):
         return {"status":"succeeded","items":list(dict.fromkeys(vals))[:MAX_ITEMS]}
     if action in {"validate_url","validate_domain","validate_phone_candidate","validate_date_iso","validate_datetime_iso","validate_json_lines","validate_csv","validate_xml_wellformed","validate_semver","validate_hex_color","validate_mac","validate_ipv6","validate_port","validate_base64","validate_sha256","validate_slug","validate_credit_card_candidate"}:
         if action=="validate_url":
-            p=urlparse(value.strip());return {"status":"succeeded","valid":p.scheme in {"http","https"} and bool(p.hostname)}
+            candidate = value.strip()
+            try:
+                parsed = urlparse(candidate)
+                # Accessing .port forces urllib to reject malformed port values.
+                _ = parsed.port
+                valid = (
+                    parsed.scheme.lower() in {"http", "https"}
+                    and bool(parsed.hostname)
+                    and not any(ch.isspace() or ord(ch) < 32 for ch in candidate)
+                    and bool(parsed.netloc)
+                )
+            except ValueError:
+                valid = False
+            return {"status":"succeeded","valid":valid}
         if action=="validate_domain":return {"status":"succeeded","valid":bool(re.fullmatch(r"(?i)(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}",value.strip()))}
         if action=="validate_phone_candidate":return {"status":"succeeded","valid":bool(re.fullmatch(r"\+?[\d ()-]{7,25}",value.strip())) and sum(x.isdigit() for x in value)>=7}
         if action=="validate_date_iso":

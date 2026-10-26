@@ -120,6 +120,20 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Local audio and video player</h3>
+  <p class="muted">Play media files selected from this device directly in Norah. Files stay in the browser session and are not uploaded.</p>
+  <div class="field"><label for="audioFile">Choose music or audio</label><input id="audioFile" type="file" accept="audio/*"></div>
+  <audio id="localAudioPlayer" controls style="width:100%;margin:8px 0"></audio>
+  <div class="row">
+    <div class="field"><label for="audioSpeed">Audio speed</label><select id="audioSpeed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div>
+    <div class="field"><label for="audioVolume">Volume (0–100)</label><input id="audioVolume" type="range" min="0" max="100" value="80"></div>
+  </div>
+  <div class="field"><label for="videoFile">Choose a video</label><input id="videoFile" type="file" accept="video/*"></div>
+  <video id="localVideoPlayer" controls playsinline style="width:100%;max-height:360px;background:#000;border-radius:12px"></video>
+  <div class="status" id="mediaStatus" role="status" aria-live="polite">Select a local audio or video file to play.</div>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Image tools</h3>
   <p class="muted">Inspect, resize, rotate, convert to grayscale or compress a user-selected image. Image files are processed by the authenticated backend and returned as downloads.</p>
   <div class="field"><label for="imageToolFile">Choose image (up to 10 MB)</label><input id="imageToolFile" type="file" accept="image/png,image/jpeg,image/webp,image/tiff,image/bmp"></div>
@@ -386,6 +400,22 @@ async function loadSocial(){
   }catch(e){status.textContent=e.message}
 }
 $("refreshSocial").addEventListener("click",loadSocial);
+let localAudioUrl=null,localVideoUrl=null;
+$("audioFile").addEventListener("change",()=>{
+  const file=$("audioFile").files[0];if(!file)return;
+  if(localAudioUrl)URL.revokeObjectURL(localAudioUrl);
+  localAudioUrl=URL.createObjectURL(file);const player=$("localAudioPlayer");
+  player.src=localAudioUrl;player.load();$("mediaStatus").textContent="Loaded audio: "+file.name;
+});
+$("videoFile").addEventListener("change",()=>{
+  const file=$("videoFile").files[0];if(!file)return;
+  if(localVideoUrl)URL.revokeObjectURL(localVideoUrl);
+  localVideoUrl=URL.createObjectURL(file);const player=$("localVideoPlayer");
+  player.src=localVideoUrl;player.load();$("mediaStatus").textContent="Loaded video: "+file.name;
+});
+$("audioSpeed").addEventListener("change",()=>$("localAudioPlayer").playbackRate=Number($("audioSpeed").value));
+$("audioVolume").addEventListener("input",()=>$("localAudioPlayer").volume=Number($("audioVolume").value)/100);
+$("localAudioPlayer").volume=.8;
 async function runImageTool(action){
   const status=$("imageToolStatus"),file=$("imageToolFile").files[0];
   if(!file){status.textContent="Choose an image first.";return}

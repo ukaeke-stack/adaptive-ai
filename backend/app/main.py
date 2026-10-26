@@ -15,6 +15,7 @@ from app.api.assistant_productivity import router as productivity_router
 from app.api.document_ocr import router as document_ocr_router
 from app.api.safe_plugins import router as safe_plugins_router
 from app.api.research import router as research_router
+from app.api.automations import router as automations_router, start_automation_worker, stop_automation_worker
 from app.security.sessions import router as auth_router
 from app.config import get_settings
 from app.security.auth import protect_api_routes
@@ -40,6 +41,7 @@ app.include_router(productivity_router)
 app.include_router(document_ocr_router)
 app.include_router(safe_plugins_router)
 app.include_router(research_router)
+app.include_router(automations_router)
 app.include_router(auth_router)
 
 # Serve the same-origin web interface. API secrets remain server-side.
@@ -69,8 +71,15 @@ app.openapi = custom_openapi
 
 @app.on_event("startup")
 def initialize_persistent_storage() -> None:
-    """Fail startup if the configured database is unavailable; ensure schema exists."""
+    """Initialize persistent storage and start the scheduled automation worker."""
     initialize_store()
+    start_automation_worker()
+
+
+@app.on_event("shutdown")
+async def stop_background_workers() -> None:
+    """Stop background workers cleanly during application shutdown."""
+    await stop_automation_worker()
 
 
 @app.get("/")

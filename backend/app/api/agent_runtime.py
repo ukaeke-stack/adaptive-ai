@@ -313,15 +313,15 @@ def _result_as_text(result: dict) -> str:
         pieces = []
         for item in result["results"][:10]:
             if isinstance(item, dict):
-                pieces.append("\\n".join(str(item.get(key, "")) for key in ("title", "snippet", "url") if item.get(key)))
-        return "\\n\\n".join(pieces)[:12000]
+                pieces.append("\n".join(str(item.get(key, "")) for key in ("title", "snippet", "url") if item.get(key)))
+        return "\n\n".join(pieces)[:12000]
     for key in ("text", "summary", "draft"):
         value = result.get(key)
         if isinstance(value, str) and value.strip():
             return value[:12000]
     bullets = result.get("bullets")
     if isinstance(bullets, list):
-        return "\\n".join(str(item) for item in bullets[:100])[:12000]
+        return "\n".join(str(item) for item in bullets[:100])[:12000]
     return json.dumps(result, ensure_ascii=False)[:12000]
 
 def _execute_step(step: dict) -> dict:

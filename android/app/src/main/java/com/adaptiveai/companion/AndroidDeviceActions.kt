@@ -127,4 +127,77 @@ class AndroidDeviceActions(private val context: Context) {
         return true
     }
 
+    /** Opens map/navigation search; the user chooses the destination and route. */
+    @JavascriptInterface
+    fun openMaps(query: String?): Boolean {
+        val safeQuery = query?.trim()?.take(300).orEmpty()
+        if (safeQuery.isBlank()) return launch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0")), "No maps application is available.")
+        return launch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(safeQuery))),
+            "No maps application is available.")
+    }
+
+    /** Opens a web search in an installed browser; it does not submit private app data. */
+    @JavascriptInterface
+    fun searchWeb(query: String?): Boolean {
+        val safeQuery = query?.trim()?.take(300).orEmpty()
+        if (safeQuery.isBlank()) return false
+        return launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(safeQuery))),
+            "No browser is available.")
+    }
+
+    /** Opens the email composer with a draft. The user reviews and sends it. */
+    @JavascriptInterface
+    fun draftEmail(address: String?, subject: String?, body: String?): Boolean {
+        val safeAddress = address?.trim()?.take(254).orEmpty()
+        if (safeAddress.isBlank() || !safeAddress.contains("@") || safeAddress.any { it.isWhitespace() }) return false
+        val safeSubject = subject?.take(200).orEmpty()
+        val safeBody = body?.take(4000).orEmpty()
+        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + Uri.encode(safeAddress)))
+            .putExtra(Intent.EXTRA_SUBJECT, safeSubject)
+            .putExtra(Intent.EXTRA_TEXT, safeBody)
+        return launch(intent, "No email application is available.")
+    }
+
+    /** Shares text using Android's chooser; nothing is sent until the user selects an app and confirms. */
+    @JavascriptInterface
+    fun shareText(text: String?): Boolean {
+        val safeText = text?.take(8000).orEmpty()
+        if (safeText.isBlank()) return false
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, safeText)
+        return launch(Intent.createChooser(send, "Share with"), "No sharing application is available.")
+    }
+
+    @JavascriptInterface
+    fun openCalendar(): Boolean =
+        launch(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR),
+            "No calendar application is available.")
+
+    @JavascriptInterface
+    fun openClock(): Boolean =
+        launch(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CLOCK),
+            "No clock application is available.")
+
+    @JavascriptInterface
+    fun openWifiSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS), "Could not open Wi-Fi settings.")
+
+    @JavascriptInterface
+    fun openBluetoothSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS), "Could not open Bluetooth settings.")
+
+    @JavascriptInterface
+    fun openLocationSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS), "Could not open location settings.")
+
+    @JavascriptInterface
+    fun openNotificationSettings(): Boolean {
+        val intent = if (android.os.Build.VERSION.SDK_INT >= 26) {
+            Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+        } else {
+            Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+        }
+        return launch(intent, "Could not open notification settings.")
+    }
+
 }

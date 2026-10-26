@@ -158,7 +158,7 @@ def test_json_csv_and_text_helpers_return_expected_values():
     assert csv_result["values"] == ["Lagos", "Abuja"]
     assert text_result["items"] == ["alpha", "beta"]
     assert count_result["count"] == 2
-    assert count_result["case_insensitive_count"] == 4
+    assert count_result["case_insensitive_count"] == 2
 
 
 def test_strict_validators_reject_invalid_candidates():

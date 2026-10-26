@@ -120,6 +120,16 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Direct tool execution</h3>
+  <p class="muted">Run an individual registered tool against explicit JSON arguments. This uses the server allowlist; unsupported actions are not executed.</p>
+  <div class="field"><label for="directToolName">Registered tool</label><select id="directToolName"><option value="">Loading tools…</option></select></div>
+  <div class="field"><label for="directToolArgs">Arguments (JSON object)</label><textarea id="directToolArgs" rows="5" maxlength="120000">{ "input": "Paste text here" }</textarea></div>
+  <div class="actions"><button id="runDirectTool" type="button">Run selected tool</button><button id="refreshDirectTools" type="button" class="ghost">Refresh tools</button></div>
+  <div class="status" id="directToolStatus" role="status" aria-live="polite">Sign in to run registered tools.</div>
+  <pre id="directToolResult" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#071321;padding:12px;border-radius:10px;max-height:360px;overflow:auto"></pre>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Multi-step workflows</h3>
   <p class="muted">Compose a sequence of supported local steps. Review the saved workflow, approve it, then run it explicitly. Message steps produce drafts only.</p>
   <div class="field"><label for="workflowName">Workflow name</label><input id="workflowName" maxlength="100" placeholder="Prepare meeting materials"></div>
@@ -356,6 +366,30 @@ async function loadSocial(){
   }catch(e){status.textContent=e.message}
 }
 $("refreshSocial").addEventListener("click",loadSocial);
+async function loadDirectTools(){
+  const select=$("directToolName"),status=$("directToolStatus");
+  try{
+    const data=await api("/v1/capabilities");select.replaceChildren();
+    for(const tool of (data.capabilities||[])){
+      if(tool.status!=="implemented")continue;
+      const option=document.createElement("option");option.value=tool.name;option.textContent=tool.name+" — "+(tool.description||"");select.append(option);
+    }
+    status.textContent=select.options.length+" registered tool(s) available through the server allowlist.";
+  }catch(e){status.textContent=e.message}
+}
+$("refreshDirectTools").addEventListener("click",loadDirectTools);
+$("runDirectTool").addEventListener("click",async()=>{
+  const status=$("directToolStatus"),output=$("directToolResult");
+  try{
+    const name=$("directToolName").value;if(!name)throw new Error("Choose a registered tool.");
+    let args;try{args=JSON.parse($("directToolArgs").value||"{}")}catch(_){throw new Error("Arguments must be valid JSON.")}
+    if(!args||Array.isArray(args)||typeof args!=="object")throw new Error("Arguments must be a JSON object.");
+    $("runDirectTool").disabled=true;status.textContent="Running "+name+"…";
+    const result=await api("/v1/tools/execute",{method:"POST",body:JSON.stringify({name,arguments:args})});
+    output.textContent=pretty(result.result);status.textContent="Tool finished. Review the result before using it elsewhere.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+  finally{$("runDirectTool").disabled=false}
+});
 async function loadWorkflows(){
   const status=$("workflowStatus"), list=$("workflowList");
   try{
@@ -442,7 +476,7 @@ $("saveAutomation").addEventListener("click",async()=>{
 $("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders();await loadWorkflows()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders();await loadWorkflows();await loadDirectTools()})();
 </script>
 </body>
 </html>

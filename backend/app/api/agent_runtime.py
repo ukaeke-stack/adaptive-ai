@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import operator
 import re
 from datetime import datetime, timezone
 from uuid import uuid4
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
@@ -75,6 +78,86 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
         plan.append({"id": "step-1", "action": "unsupported_goal", "status": "blocked",
                      "reason": "This goal needs an integration or tool that is not enabled in the current safe runtime."})
     return plan
+
+
+def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
+    """Ask the configured model to plan only among the registered safe actions.
+
+    Any malformed or untrusted plan is rejected; callers fall back to deterministic
+    planning. The model never supplies code and cannot add new action names.
+    """
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip().rstrip("/")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b").strip()
+    parsed = urlparse(base_url)
+    if not api_key or not model or parsed.scheme != "https" or parsed.hostname != "api.groq.com":
+        return None
+    system = (
+        "You are a task planner for a constrained assistant. Return JSON only, shaped as "
+        '{"steps":[{"action":"count_words|extract_bullets|draft_message|calculate|create_reminder",'
+        '"input":"optional text","expression":"optional arithmetic","title":"optional reminder title",'
+        '"due_at":"optional ISO-8601 datetime","notes":"optional reminder notes"}]}. '
+        "Use 1 to 5 steps. Only use these exact action names: count_words, extract_bullets, "
+        "draft_message, calculate, create_reminder. Never invent tools. Never plan sending messages, "
+        "calls, payments, publishing, arbitrary code, browser control, or device control. "
+        "If the goal cannot be completed using the allowed actions, return {\"steps\":[]}."
+    )
+    safe_context = {str(k)[:40]: str(v)[:4000] for k, v in list(context.items())[:10]}
+    try:
+        with httpx.Client(timeout=httpx.Timeout(12.0, connect=5.0)) as client:
+            response = client.post(
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": model, "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": json.dumps({"goal": goal[:2000], "context": safe_context})},
+                ], "temperature": 0.1, "max_completion_tokens": 700, "response_format": {"type": "json_object"}},
+            )
+            response.raise_for_status()
+            raw = response.json()["choices"][0]["message"]["content"]
+        parsed_plan = json.loads(raw)
+        raw_steps = parsed_plan.get("steps") if isinstance(parsed_plan, dict) else None
+        if not isinstance(raw_steps, list) or not 1 <= len(raw_steps) <= 5:
+            return None
+        plan = []
+        for index, item in enumerate(raw_steps, start=1):
+            if not isinstance(item, dict) or item.get("action") not in SAFE_ACTIONS:
+                return None
+            action = item["action"]
+            step = {"id": f"step-{index}", "action": action, "status": "pending"}
+            if action in {"count_words", "extract_bullets"}:
+                value = item.get("input", safe_context.get("text", ""))
+                if not isinstance(value, str) or len(value) > 12000:
+                    return None
+                step["input"] = value
+                step["requires_context"] = not bool(value.strip())
+            elif action == "draft_message":
+                value = item.get("input", safe_context.get("instructions", goal))
+                if not isinstance(value, str) or len(value) > 4000:
+                    return None
+                step["input"] = value
+                step["external_send"] = False
+            elif action == "calculate":
+                expression = item.get("expression", safe_context.get("expression", ""))
+                if not isinstance(expression, str) or len(expression) > 120:
+                    return None
+                step["expression"] = expression
+            elif action == "create_reminder":
+                title = item.get("title", safe_context.get("reminder_title", "")).strip()
+                if not title or len(title) > 160:
+                    return None
+                due_at = item.get("due_at", safe_context.get("due_at")) or None
+                notes = item.get("notes", safe_context.get("notes", ""))
+                if due_at is not None and (not isinstance(due_at, str) or len(due_at) > 64):
+                    return None
+                if not isinstance(notes, str) or len(notes) > 2000:
+                    return None
+                step.update({"title": title, "due_at": due_at, "notes": notes,
+                             "device_notification_scheduled": False})
+            plan.append(step)
+        return plan
+    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+        return None
 
 
 def _calculate(expression: str) -> float | int:
@@ -169,7 +252,7 @@ def create_task(body: TaskCreate, request: Request):
     user = require_user(request)
     _ensure_table()
     task_id, now = str(uuid4()), _now()
-    plan = _plan(body.goal.strip(), body.context)
+    plan = _ai_plan(body.goal.strip(), body.context) or _plan(body.goal.strip(), body.context)
     with _ready_engine().begin() as conn:
         conn.execute(text("""INSERT INTO adaptive_agent_tasks
             (id,user_id,goal,context_json,plan_json,results_json,status,created_at,updated_at)

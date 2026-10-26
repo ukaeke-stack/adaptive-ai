@@ -81,3 +81,5 @@ def test_agent_workspace_is_served():
     response = client.get("/app/agent.html")
     assert response.status_code == 200
     assert "Norah Agent Desk" in response.text
+    assert 'id="extractPdf"' in response.text
+    assert 'id="ocrPdf"' in response.text

@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.ValueCallback
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -20,6 +21,7 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private var pendingMediaPermission: android.webkit.PermissionRequest? = null
+    private var pendingFileChooser: ValueCallback<Array<Uri>>? = null
     private lateinit var speechBridge: AndroidSpeechBridge
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +40,29 @@ class MainActivity : Activity() {
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = WebViewClient()
             webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: WebChromeClient.FileChooserParams?
+                ): Boolean {
+                    pendingFileChooser?.onReceiveValue(null)
+                    pendingFileChooser = filePathCallback
+                    val acceptedType = fileChooserParams?.acceptTypes?.firstOrNull { it.isNotBlank() && it != "*/*" }
+                        ?: "application/pdf"
+                    val pick = Intent(Intent.ACTION_GET_CONTENT).apply {
+                        type = acceptedType
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                    }
+                    return try {
+                        startActivityForResult(Intent.createChooser(pick, "Choose a document"), 905)
+                        true
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        pendingFileChooser?.onReceiveValue(null)
+                        pendingFileChooser = null
+                        Toast.makeText(this@MainActivity, "No file picker is available.", Toast.LENGTH_LONG).show()
+                        false
+                    }
+                }
                 override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
                     runOnUiThread {
                         val needed = mutableListOf<String>()
@@ -88,6 +113,13 @@ class MainActivity : Activity() {
     }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 905) {
+            val callback = pendingFileChooser
+            pendingFileChooser = null
+            val uri = if (resultCode == RESULT_OK) data?.data else null
+            callback?.onReceiveValue(if (uri != null) arrayOf(uri) else null)
+            return
+        }
         if (requestCode == 901 && Settings.canDrawOverlays(this)) startRobotService()
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

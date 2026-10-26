@@ -159,6 +159,7 @@
 <section class="panel" style="margin-top:16px">
   <h3>Direct tool execution</h3>
   <p class="muted">Run an individual registered tool against explicit JSON arguments. This uses the server allowlist; unsupported actions are not executed.</p>
+  <div class="field"><label for="directToolFilter">Search registered tools</label><input id="directToolFilter" type="search" maxlength="100" placeholder="e.g. JSON, CSV, date, image, validation"></div>
   <div class="field"><label for="directToolName">Registered tool</label><select id="directToolName"><option value="">Loading tools…</option></select></div>
   <div class="field"><label for="directToolArgs">Arguments (JSON object)</label><textarea id="directToolArgs" rows="5" maxlength="120000">{ "input": "Paste text here" }</textarea></div>
   <div class="actions"><button id="runDirectTool" type="button">Run selected tool</button><button id="refreshDirectTools" type="button" class="ghost">Refresh tools</button></div>
@@ -227,7 +228,7 @@
 </div>
 <script>
 const $=id=>document.getElementById(id);
-let authenticated=false, tasks=[];
+let authenticated=false, tasks=[], directToolCatalog=[];
 function safeText(value){return String(value??"")}
 function pretty(value){return JSON.stringify(value,null,2)}
 async function api(path,options={}){const response=await fetch(path,{credentials:"same-origin",...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});const data=await response.json().catch(()=>({detail:"The server returned an unreadable response."}));if(!response.ok)throw new Error(data.detail||("Request failed ("+response.status+")"));return data}
@@ -476,17 +477,25 @@ async function runImageTool(action){
   finally{if(button)button.disabled=false}
 }
 document.querySelectorAll("[data-image-tool]").forEach(button=>button.addEventListener("click",()=>runImageTool(button.dataset.imageTool)));
+function renderDirectToolOptions(){
+  const select=$("directToolName"),query=$("directToolFilter").value.trim().toLowerCase(),previous=select.value;
+  select.replaceChildren();
+  const filtered=directToolCatalog.filter(tool=>!query||(tool.name+" "+(tool.description||"")).toLowerCase().includes(query));
+  for(const tool of filtered){
+    const option=document.createElement("option");option.value=tool.name;option.textContent=tool.name+" — "+(tool.description||"");select.append(option);
+  }
+  if(filtered.some(tool=>tool.name===previous))select.value=previous;
+  $("directToolStatus").textContent=filtered.length+" of "+directToolCatalog.length+" registered tool(s) shown.";
+}
 async function loadDirectTools(){
-  const select=$("directToolName"),status=$("directToolStatus");
+  const status=$("directToolStatus");
   try{
-    const data=await api("/v1/tools");select.replaceChildren();
-    for(const tool of (data.tools||[])){
-      if(tool.status!=="implemented")continue;
-      const option=document.createElement("option");option.value=tool.name;option.textContent=tool.name+" — "+(tool.description||"");select.append(option);
-    }
-    status.textContent=select.options.length+" registered tool(s) available through the server allowlist.";
+    const data=await api("/v1/tools");
+    directToolCatalog=(data.tools||[]).filter(tool=>tool.status==="implemented");
+    renderDirectToolOptions();
   }catch(e){status.textContent=e.message}
 }
+$("directToolFilter").addEventListener("input",renderDirectToolOptions);
 $("refreshDirectTools").addEventListener("click",loadDirectTools);
 $("runDirectTool").addEventListener("click",async()=>{
   const status=$("directToolStatus"),output=$("directToolResult");

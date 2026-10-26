@@ -63,8 +63,8 @@ def execute_extended(step: dict) -> dict | None:
     if action not in EXTENDED_ACTIONS:
         return None
 
-    value = _text(step)
-    if not value.strip():
+    value = "" if action == "convert_units" else _text(step)
+    if action != "convert_units" and not value.strip():
         return {"status": "needs_input", "message": "Add text in the task context before running this step."}
     if action == "count_characters":
         return {"status": "succeeded", "characters_including_spaces": len(value),

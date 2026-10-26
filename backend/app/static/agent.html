@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#081326">
+<title>Norah Agent Desk</title>
+<style>
+:root{color-scheme:dark;--bg:#07111f;--panel:#101e31;--line:#29425d;--text:#edf5ff;--muted:#9eb1c9;--cyan:#61e6ef;--violet:#9d8cff;--green:#73e2ad;--red:#ffaaa9}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -15%,#203b60 0,transparent 55%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}.shell{max-width:1120px;margin:auto;padding:20px 16px 42px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:22px}.brand{display:flex;align-items:center;gap:12px}.mark{display:grid;place-items:center;width:44px;height:44px;border-radius:15px;background:linear-gradient(135deg,var(--cyan),var(--violet));color:#081326;font-weight:900;font-size:21px}.brand h1{font-size:20px;margin:0}.brand p{font-size:12px;color:var(--muted);margin:2px 0 0}.nav{display:flex;gap:8px;flex-wrap:wrap}.button,button{border:0;border-radius:12px;padding:10px 14px;background:linear-gradient(135deg,var(--cyan),#8ab8ff);color:#061426;font-weight:750;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.ghost{background:#182b42;color:var(--text);border:1px solid #304965}.button:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}.hero{padding:26px;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,#142940,#10192c);margin-bottom:18px}.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);font-weight:800}.hero h2{font-size:clamp(25px,4vw,38px);line-height:1.15;margin:8px 0 10px;max-width:700px}.hero p{color:var(--muted);max-width:780px;margin:0}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:20px}.stat{padding:12px;background:#091629;border:1px solid #263c55;border-radius:14px}.stat strong{display:block;font-size:20px}.stat span{font-size:11px;color:var(--muted)}.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}.panel{background:linear-gradient(160deg,rgba(20,38,61,.96),rgba(11,23,39,.96));border:1px solid var(--line);border-radius:20px;padding:18px}.panel h3{margin:0 0 5px;font-size:17px}.muted{color:var(--muted);font-size:12px;margin:0 0 14px}.field{display:flex;flex-direction:column;gap:6px;margin:12px 0}.field label{font-size:12px;color:#c4d3e4;font-weight:700}input,textarea,select{font:inherit;color:var(--text);background:#081528;border:1px solid #2b425e;border-radius:11px;padding:11px 12px;width:100%}textarea{min-height:94px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.status{padding:10px 12px;background:#091629;border:1px solid #263c55;border-radius:11px;color:var(--muted);font-size:12px;min-height:40px;overflow-wrap:anywhere}.status.error{color:var(--red)}.task-list{display:flex;flex-direction:column;gap:10px;margin-top:14px}.task{padding:14px;border:1px solid #2a425d;border-radius:14px;background:#0b192b}.task-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.task h4{font-size:14px;margin:0 0 4px}.tag{font-size:10px;text-transform:uppercase;letter-spacing:.08em;border-radius:20px;border:1px solid #37516e;padding:3px 7px;color:var(--cyan);white-space:nowrap}.task pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:#b8c9dd;background:#071321;padding:10px;border-radius:9px;max-height:220px;overflow:auto}.task-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.task-actions button{font-size:11px;padding:7px 10px}.notice{font-size:12px;color:var(--muted);padding:12px;border-left:3px solid var(--violet);background:#101a2c;border-radius:0 10px 10px 0;margin-top:14px}.hidden{display:none!important}.empty{padding:25px 10px;text-align:center;color:var(--muted);font-size:13px}@media(max-width:760px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.stat:last-child{grid-column:span 2}.hero{padding:20px}.shell{padding:14px 12px 32px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="top">
+  <div class="brand"><div class="mark">N</div><div><h1>Norah Agent Desk</h1><p>Plan · Execute · Verify · Keep a record</p></div></div>
+  <nav class="nav"><a class="button ghost" href="/app/">Back to Norah Chat</a><button class="ghost" id="refresh">Refresh tasks</button></nav>
+</header>
+<section class="hero">
+  <div class="eyebrow">Adaptive AI · Task workspace</div>
+  <h2>Turn instructions into trackable work.</h2>
+  <p>Create a goal, review the proposed plan, then explicitly run supported steps. Norah records results instead of pretending a task succeeded. This first agent runtime is deliberately limited to safe actions while broader integrations are built and tested.</p>
+  <div class="stats"><div class="stat"><strong id="taskCount">—</strong><span>Saved tasks</span></div><div class="stat"><strong id="toolCount">5</strong><span>Bounded action types</span></div><div class="stat"><strong id="statusCount">—</strong><span>Completed tasks</span></div></div>
+</section>
+<div class="grid">
+<section class="panel">
+  <h3>Create a task</h3><p class="muted">Describe one goal. Add supporting content or structured details if needed.</p>
+  <div class="field"><label for="goal">Goal or instruction</label><textarea id="goal" maxlength="2000" placeholder="Example: Count the words in this document, draft a message, or create a reminder." required></textarea></div>
+  <div class="field"><label for="taskText">Text to process (optional)</label><textarea id="taskText" maxlength="12000" placeholder="Paste document text for word count or bullet extraction."></textarea></div>
+  <div class="row">
+    <div class="field"><label for="expression">Arithmetic expression</label><input id="expression" maxlength="120" placeholder="1250 * 4 + 300"></div>
+    <div class="field"><label for="reminderTitle">Reminder title</label><input id="reminderTitle" maxlength="160" placeholder="Call supplier"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="dueAt">Reminder date/time (ISO-8601)</label><input id="dueAt" placeholder="2026-11-01T09:00:00+01:00"></div>
+    <div class="field"><label for="instructions">Draft instructions (optional)</label><input id="instructions" maxlength="4000" placeholder="Write a polite follow-up message"></div>
+  </div>
+  <div class="actions"><button id="createTask">Build task plan</button><button class="ghost" id="clearForm">Clear</button></div>
+  <div class="status" id="createStatus" role="status" aria-live="polite" style="margin-top:12px">Checking your sign-in session…</div>
+  <div class="notice">Execution is limited to local text analysis, message drafts, basic arithmetic and saved in-app reminders. Drafts are not sent. Reminder notifications are not yet scheduled by this agent runtime. Unsupported goals are blocked rather than simulated.</div>
+</section>
+<section class="panel">
+  <h3>Task history</h3><p class="muted">Your saved plans and execution results, scoped to your account.</p>
+  <div class="status" id="historyStatus" role="status" aria-live="polite">Loading task history…</div>
+  <div id="taskList" class="task-list"><div class="empty">No tasks loaded yet.</div></div>
+</section>
+</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let authenticated=false, tasks=[];
+function safeText(value){return String(value??"")}
+function pretty(value){return JSON.stringify(value,null,2)}
+async function api(path,options={}){const response=await fetch(path,{credentials:"same-origin",...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});const data=await response.json().catch(()=>({detail:"The server returned an unreadable response."}));if(!response.ok)throw new Error(data.detail||("Request failed ("+response.status+")"));return data}
+async function checkSession(){try{const data=await api("/v1/auth/me",{headers:{}});authenticated=!!data.authenticated;$("createTask").disabled=!authenticated;$("createStatus").textContent=authenticated?"Signed in. Build a plan when ready.":"Sign in on the main Norah page, then return here.";if(!authenticated)$("createStatus").classList.add("error");else $("createStatus").classList.remove("error")}catch(e){authenticated=false;$("createTask").disabled=true;$("createStatus").textContent="Could not verify sign-in. Open the main Norah page and sign in."; $("createStatus").classList.add("error")}}
+function renderTasks(){const list=$("taskList");list.replaceChildren();$("taskCount").textContent=String(tasks.length);$("statusCount").textContent=String(tasks.filter(t=>t.status==="succeeded").length);if(!tasks.length){list.innerHTML='<div class="empty">No saved tasks yet. Create your first plan on the left.</div>';return}for(const task of tasks){const card=document.createElement("article");card.className="task";const head=document.createElement("div");head.className="task-head";const title=document.createElement("div");const h=document.createElement("h4");h.textContent=task.goal;const meta=document.createElement("div");meta.className="muted";meta.textContent=new Date(task.updated_at).toLocaleString();title.append(h,meta);const tag=document.createElement("span");tag.className="tag";tag.textContent=task.status;head.append(title,tag);const details=document.createElement("details");const summary=document.createElement("summary");summary.textContent="View plan and results";const pre=document.createElement("pre");pre.textContent=pretty({plan:task.plan,results:task.results});details.append(summary,pre);const actions=document.createElement("div");actions.className="task-actions";if(task.status==="planned"&&!task.plan.some(s=>s.action==="unsupported_goal")){const run=document.createElement("button");run.textContent="Run reviewed plan";run.addEventListener("click",()=>runTask(task.id));actions.append(run)}if(["planned","failed","partially_failed"].includes(task.status)){const cancel=document.createElement("button");cancel.className="ghost";cancel.textContent="Cancel";cancel.addEventListener("click",()=>cancelTask(task.id));actions.append(cancel)}card.append(head,details,actions);list.append(card)}}
+async function refreshTasks(){if(!authenticated){$("historyStatus").textContent="Sign in on the main Norah page to view your tasks.";return}try{const data=await api("/v1/agent/tasks");tasks=data.tasks||[];$("historyStatus").textContent=tasks.length?"Loaded "+tasks.length+" saved task(s).":"No tasks saved yet.";renderTasks()}catch(e){$("historyStatus").textContent=e.message}}
+$("createTask").addEventListener("click",async()=>{if(!authenticated)return;const goal=$("goal").value.trim();if(goal.length<3){$("createStatus").textContent="Enter a goal with at least 3 characters.";$("createStatus").classList.add("error");return}const context={};if($("taskText").value)context.text=$("taskText").value;if($("expression").value)context.expression=$("expression").value;if($("reminderTitle").value)context.reminder_title=$("reminderTitle").value;if($("dueAt").value)context.due_at=$("dueAt").value;if($("instructions").value)context.instructions=$("instructions").value;$("createTask").disabled=true;$("createStatus").textContent="Planning and saving task…";try{const data=await api("/v1/agent/tasks",{method:"POST",body:JSON.stringify({goal,context})});$("createStatus").textContent=data.message+" Plan: "+data.task.plan.map(s=>s.action).join(", ");$("createStatus").classList.remove("error");$("goal").value="";await refreshTasks()}catch(e){$("createStatus").textContent=e.message;$("createStatus").classList.add("error")}finally{$("createTask").disabled=!authenticated}});
+async function runTask(id){if(!confirm("Run this plan now? Only the listed supported actions will execute."))return;try{$("historyStatus").textContent="Executing reviewed task…";const data=await api("/v1/agent/tasks/"+encodeURIComponent(id)+"/run",{method:"POST",body:"{}"});$("historyStatus").textContent=data.message;await refreshTasks()}catch(e){$("historyStatus").textContent=e.message}}
+async function cancelTask(id){try{await api("/v1/agent/tasks/"+encodeURIComponent(id)+"/cancel",{method:"POST",body:"{}"});await refreshTasks()}catch(e){$("historyStatus").textContent=e.message}}
+$("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
+(async()=>{await checkSession();await refreshTasks()})();
+</script>
+</body>
+</html>

@@ -58,3 +58,11 @@ def test_search_sanitizes_provider_results(monkeypatch):
 def test_search_rejects_unknown_request_fields():
     with pytest.raises(Exception):
         research.SearchRequest(query="valid query", unexpected="secret")
+
+
+
+def test_research_routes_are_registered():
+    from app.main import app
+    paths = app.openapi()["paths"]
+    assert "/v1/research/status" in paths
+    assert "/v1/research/search" in paths

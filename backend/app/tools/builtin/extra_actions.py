@@ -1127,4 +1127,144 @@ def execute_extra(action, step, value):
     if action=="extract_html_links_text":
         vals=re.findall(r"""(?is)<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>""",value)
         return {"status":"succeeded","links":[{"url":u,"text":re.sub(r"<[^>]*>","",t).strip()} for u,t in vals[:MAX_ITEMS]]}
+
+    if action in {"format_phone_candidate","mask_urls","extract_top_words","count_word_frequency","extract_nonempty_lines","sort_numeric_lines","jsonl_count_lines","json_schema_preview","json_type_report","json_array_group_by","json_array_count_by_key","extract_xml_namespaces","extract_xml_comments","extract_html_attributes","extract_css_selectors","extract_css_media_queries","extract_js_imports","extract_js_exports","extract_python_decorators","extract_python_constants","extract_python_docstrings","extract_sql_comments","extract_sql_indexes","extract_http_headers","redact_secrets","extract_stack_frames","parse_duration","format_duration","convert_seconds_to_minutes","convert_minutes_to_seconds","convert_milliseconds_to_seconds","calculate_square_root","calculate_power","calculate_logarithm","calculate_permutation","calculate_combination","calculate_compound_rate","calculate_sales_tax","calculate_average_speed","calculate_distance","calculate_time","convert_percentage_decimal","convert_decimal_percentage","convert_fraction_decimal","decimal_to_fraction","fraction_to_decimal","roman_numeral_validate","format_bytes","format_number_commas","parse_number_locale","format_currency_preview","convert_milliseconds_to_duration","extract_iban_candidates","validate_iban","validate_bic","extract_postal_codes","extract_coordinates","validate_latitude_longitude"}:
+        if action=="format_phone_candidate":
+            raw=str(step.get("phone",value));return {"status":"succeeded","candidate":("+" if raw.strip().startswith("+") else "")+re.sub(r"\D","",raw),"note":"Formatting only; not country-plan validated."}
+        if action=="mask_urls":return {"status":"succeeded","text":re.sub(r"https?://\S+","[REDACTED_URL]",value)}
+        if action in {"extract_top_words","count_word_frequency"}:
+            words=[x.casefold() for x in re.findall(r"\b[\w'-]+\b",value)];counts=Counter(words);limit=step.get("limit",20)
+            if not isinstance(limit,int) or not 1<=limit<=MAX_ITEMS:limit=20
+            return {"status":"succeeded","frequency":dict(counts.most_common(limit)),"total_words":len(words),"unique_words":len(counts)}
+        if action=="extract_nonempty_lines":
+            vals=[x for x in lines if x.strip()];return {"status":"succeeded","lines":vals[:MAX_ITEMS],"count":len(vals)}
+        if action=="sort_numeric_lines":
+            def nk(x):
+                m=re.search(r"-?\d+(?:\.\d+)?",x);return float(m.group(0)) if m else float("inf")
+            return {"status":"succeeded","text":"\n".join(sorted(lines,key=nk,reverse=bool(step.get("descending",False))))[:MAX_TEXT]}
+        if action=="jsonl_count_lines":
+            good=0;bad=[]
+            for i,line in enumerate(lines,1):
+                if line.strip():
+                    try:json.loads(line);good+=1
+                    except json.JSONDecodeError:bad.append(i)
+            return {"status":"succeeded","valid_records":good,"invalid_lines":bad[:MAX_ITEMS]}
+        if action in {"json_schema_preview","json_type_report","json_array_group_by","json_array_count_by_key"}:
+            try:obj=json.loads(value)
+            except json.JSONDecodeError:return {"status":"failed","message":"Invalid JSON."}
+            if action in {"json_schema_preview","json_type_report"}:
+                def infer(x):
+                    if isinstance(x,dict):return {"type":"object","properties":{k:infer(v) for k,v in x.items()}}
+                    if isinstance(x,list):return {"type":"array","items":infer(x[0]) if x else {}}
+                    return {"type":"null" if x is None else "boolean" if isinstance(x,bool) else "integer" if isinstance(x,int) else "number" if isinstance(x,float) else "string"}
+                return {"status":"succeeded","schema":infer(obj),"root_type":type(obj).__name__}
+            if not isinstance(obj,list):return {"status":"failed","message":"JSON root must be an array."}
+            key=step.get("key");counts=Counter(str(x.get(key,"")) for x in obj if isinstance(x,dict))
+            if action=="json_array_count_by_key":return {"status":"succeeded","counts":dict(counts.most_common(MAX_ITEMS))}
+            groups={}
+            for x in obj:groups.setdefault(str(x.get(key,"") if isinstance(x,dict) else ""),[]).append(x)
+            return {"status":"succeeded","groups":{k:v[:MAX_ITEMS] for k,v in list(groups.items())[:100]}}
+        if action=="extract_xml_namespaces":
+            vals=re.findall(r"""xmlns(?::([A-Za-z_][\w.-]*))?\s*=\s*["']([^"']+)["']""",value)
+            return {"status":"succeeded","namespaces":[{"prefix":a or "default","uri":b} for a,b in vals[:MAX_ITEMS]]}
+        if action=="extract_xml_comments":return {"status":"succeeded","comments":re.findall(r"(?s)<!--(.*?)-->",value)[:MAX_ITEMS]}
+        if action=="extract_html_attributes":
+            vals=[]
+            for tag in re.findall(r"(?is)<[A-Za-z][^>]*>",value):
+                m=re.match(r"<\s*([A-Za-z][\w:-]*)",tag);attrs=re.findall(r"""([A-Za-z_:][\w:.-]*)\s*=\s*["']([^"']*)["']""",tag)
+                vals.extend({"tag":m.group(1) if m else "unknown","name":k,"value":v} for k,v in attrs)
+            return {"status":"succeeded","attributes":vals[:MAX_ITEMS]}
+        if action=="extract_css_selectors":return {"status":"succeeded","selectors":[x.strip() for x in re.findall(r"([^{}]+)\{",value) if x.strip()][:MAX_ITEMS]}
+        if action=="extract_css_media_queries":return {"status":"succeeded","queries":[x.strip() for x in re.findall(r"(?is)@media[^{]+\{",value)][:MAX_ITEMS]}
+        if action=="extract_js_imports":return {"status":"succeeded","imports":re.findall(r"(?m)^\s*import\s+.+",value)[:MAX_ITEMS]}
+        if action=="extract_js_exports":return {"status":"succeeded","exports":re.findall(r"(?m)^\s*export\s+(?:default\s+)?(?:const|let|var|function|class)?\s*([A-Za-z_$][\w$]*)?",value)[:MAX_ITEMS]}
+        if action=="extract_python_decorators":return {"status":"succeeded","decorators":re.findall(r"(?m)^\s*@([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)",value)[:MAX_ITEMS]}
+        if action=="extract_python_constants":return {"status":"succeeded","constants":re.findall(r"(?m)^([A-Z][A-Z0-9_]{1,})\s*=",value)[:MAX_ITEMS]}
+        if action=="extract_python_docstrings":return {"status":"succeeded","docstrings":re.findall(r'(?s)"""(.*?)"""',value)[:MAX_ITEMS]}
+        if action=="extract_sql_comments":return {"status":"succeeded","comments":re.findall(r"--[^\n]*|/\*.*?\*/",value,re.S)[:MAX_ITEMS]}
+        if action=="extract_sql_indexes":return {"status":"succeeded","indexes":re.findall(r"(?is)\bcreate\s+(?:unique\s+)?index\s+([A-Za-z_]\w*)",value)[:MAX_ITEMS]}
+        if action=="extract_http_headers":
+            vals=[]
+            for line in lines:
+                if ":" in line:
+                    k,v=line.split(":",1)
+                    if re.fullmatch(r"[!#$%&'*+.^_|~0-9A-Za-z-]+",k.strip()):vals.append({"name":k.strip(),"value":v.strip()})
+            return {"status":"succeeded","headers":vals[:MAX_ITEMS]}
+        if action=="redact_secrets":
+            res=re.sub(r"(?i)\b(api[_-]?key|access[_-]?token|secret|password)\b\s*[:=]\s*['\"]?[^,\s;'\"]+","\\1=[REDACTED]",value)
+            return {"status":"succeeded","text":re.sub(r"\b[A-Za-z0-9_-]{32,}\b","[REDACTED_TOKEN_CANDIDATE]",res)[:MAX_TEXT],"note":"Pattern-based redaction; review for missed secrets."}
+        if action=="extract_stack_frames":
+            vals=re.findall(r'(?m)^\s*File "([^"]+)", line (\d+), in ([^\n]+)',value)
+            return {"status":"succeeded","frames":[{"file":a,"line":int(b),"function":d} for a,b,d in vals[:MAX_ITEMS]]}
+        if action in {"parse_duration","format_duration","convert_seconds_to_minutes","convert_minutes_to_seconds","convert_milliseconds_to_seconds","convert_milliseconds_to_duration"}:
+            if action=="parse_duration":
+                n=sum(float(x)*{"d":86400,"h":3600,"m":60,"s":1,"ms":.001}[u.lower()] for x,u in re.findall(r"(\d+(?:\.\d+)?)\s*(ms|d|h|m|s)\b",value.lower()))
+                return {"status":"succeeded","seconds":n}
+            n=float(step.get("seconds",value)) if action=="format_duration" else float(value)*(60 if action=="convert_minutes_to_seconds" else 1/60 if action=="convert_seconds_to_minutes" else .001)
+            if action in {"format_duration","convert_milliseconds_to_duration"}:
+                n=int(max(0,n));d,r=divmod(n,86400);h,r=divmod(r,3600);m,s=divmod(r,60)
+                return {"status":"succeeded","seconds":n,"formatted":f"{d}d {h}h {m}m {s}s"}
+            return {"status":"succeeded","value":n}
+        if action in {"calculate_square_root","calculate_power","calculate_logarithm","calculate_permutation","calculate_combination","calculate_compound_rate","calculate_sales_tax","calculate_average_speed","calculate_distance","calculate_time"}:
+            import math
+            nums=[float(x) for x in re.findall(r"-?\d+(?:\.\d+)?",value)];a=float(step.get("a",nums[0] if nums else 0));b=float(step.get("b",nums[1] if len(nums)>1 else 0))
+            if action=="calculate_square_root":
+                if a<0:return {"status":"failed","message":"Input must be non-negative."}
+                res=math.sqrt(a)
+            elif action=="calculate_power":res=a**b
+            elif action=="calculate_logarithm":
+                base=float(step.get("base",10))
+                if a<=0 or base<=0 or base==1:return {"status":"failed","message":"Invalid logarithm input."}
+                res=math.log(a,base)
+            elif action in {"calculate_permutation","calculate_combination"}:
+                n=int(a);r=int(step.get("r",b))
+                if n<0 or r<0 or r>n or n>10000:return {"status":"failed","message":"Require 0 <= r <= n <= 10000."}
+                res=math.perm(n,r) if action=="calculate_permutation" else math.comb(n,r)
+            elif action=="calculate_compound_rate":
+                periods=float(step.get("periods",1))
+                if a<=0 or b<=0 or periods<=0:return {"status":"failed","message":"Inputs must be positive."}
+                res=((b/a)**(1/periods)-1)*100
+            elif action=="calculate_sales_tax":res=a*float(step.get("rate",b))/100
+            elif action=="calculate_average_speed":
+                if b<=0:return {"status":"failed","message":"Time must be positive."}
+                res=a/b
+            elif action=="calculate_distance":res=a*b
+            else:
+                if b==0:return {"status":"failed","message":"Speed cannot be zero."}
+                res=a/b
+            return {"status":"succeeded","result":res}
+        if action in {"convert_percentage_decimal","convert_decimal_percentage","convert_fraction_decimal","decimal_to_fraction","fraction_to_decimal","roman_numeral_validate","format_bytes","format_number_commas","parse_number_locale","format_currency_preview"}:
+            if action=="convert_percentage_decimal":return {"status":"succeeded","result":float(value.strip().replace("%",""))/100}
+            if action=="convert_decimal_percentage":return {"status":"succeeded","result":float(value.strip())*100}
+            if action=="fraction_to_decimal":
+                a,b=value.split("/",1);return {"status":"succeeded","result":float(a)/float(b)}
+            if action=="decimal_to_fraction":
+                from fractions import Fraction
+                return {"status":"succeeded","fraction":str(Fraction(value.strip()).limit_denominator(100000))}
+            if action=="roman_numeral_validate":return {"status":"succeeded","valid":bool(re.fullmatch(r"(?i)M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})",value.strip()))}
+            if action=="format_bytes":
+                n=float(value.strip());unit="B"
+                for u in ("KB","MB","GB","TB"):
+                    if abs(n)<1000:break
+                    n/=1000;unit=u
+                return {"status":"succeeded","formatted":f"{n:.2f} {unit}"}
+            if action=="format_number_commas":return {"status":"succeeded","formatted":format(float(value.strip()),",")}
+            if action=="parse_number_locale":return {"status":"succeeded","number":float(value.strip().replace(",",""))}
+            return {"status":"succeeded","formatted":str(step.get("currency","NGN")).upper()+" "+format(float(step.get("amount",value)),",.2f"),"note":"Formatting only; no FX conversion."}
+        if action in {"extract_iban_candidates","validate_iban","validate_bic","extract_postal_codes","extract_coordinates","validate_latitude_longitude"}:
+            if action=="extract_iban_candidates":
+                vals=re.findall(r"(?i)\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",value)
+                return {"status":"succeeded","candidates":[x.upper() for x in vals[:MAX_ITEMS]]}
+            if action=="validate_iban":
+                iban=re.sub(r"\s","",value).upper()
+                if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{11,30}",iban):return {"status":"succeeded","valid":False}
+                x=iban[4:]+iban[:4];n="".join(str(ord(ch)-55) if ch.isalpha() else ch for ch in x)
+                return {"status":"succeeded","valid":int(n)%97==1,"note":"Checksum only; country-specific length may differ."}
+            if action=="validate_bic":return {"status":"succeeded","valid":bool(re.fullmatch(r"(?i)[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?",value.strip()))}
+            if action=="extract_postal_codes":return {"status":"succeeded","candidates":list(dict.fromkeys(re.findall(r"(?i)\b[A-Z0-9]{3,4}[ -]?[A-Z0-9]{2,4}\b",value)))[:MAX_ITEMS],"note":"Country-agnostic candidates only."}
+            if action=="extract_coordinates":return {"status":"succeeded","candidates":re.findall(r"-?\d{1,3}\.\d+\s*[, ]\s*-?\d{1,3}\.\d+",value)[:MAX_ITEMS]}
+            p=re.split(r"[,;\s]+",value.strip())
+            try:lat,lon=float(p[0]),float(p[1]);ok=-90<=lat<=90 and -180<=lon<=180
+            except (ValueError,IndexError):lat=lon=None;ok=False
+            return {"status":"succeeded","valid":ok,"latitude":lat,"longitude":lon}
     return None

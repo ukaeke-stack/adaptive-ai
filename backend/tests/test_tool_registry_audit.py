@@ -73,7 +73,40 @@ def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors
     failures = []
     for name in sorted(EXTENDED_ACTIONS):
         try:
-            result = execute_extended({**common_arguments, "action": name})
+            action_input = common_arguments["input"]
+            if name.startswith("csv_") or name in {"csv_to_tsv", "markdown_table_to_csv"}:
+                action_input = "name,age\\nAlice,30\\nBob,40\\n,\\n"
+            elif name == "tsv_to_csv":
+                action_input = "name\\tage\\nAlice\\t30\\nBob\\t40\\n"
+            elif name.startswith("json_") or name in {"json_minify", "json_sort_keys", "json_to_xml_preview"}:
+                action_input = '{"name":"Alice","age":30,"items":[1,2]}'
+                if any(token in name for token in ("array", "jsonl", "to_csv", "to_markdown_table")):
+                    action_input = '[{"name":"Alice","age":30},{"name":"Bob","age":40}]'
+            elif name == "markdown_table_to_csv" or name == "extract_markdown_tables":
+                action_input = "| name | age |\\n| --- | --- |\\n| Alice | 30 |"
+            elif name in {"convert_percentage_decimal", "convert_decimal_percentage", "convert_fraction_decimal", "decimal_to_fraction", "fraction_to_decimal", "format_bytes", "format_number_commas", "parse_number_locale", "convert_milliseconds_to_duration", "convert_milliseconds_to_seconds", "convert_minutes_to_seconds", "convert_seconds_to_minutes", "calculate_square_root", "calculate_power", "calculate_logarithm", "calculate_permutation", "calculate_combination", "calculate_compound_rate", "calculate_sales_tax", "calculate_average_speed", "calculate_distance", "calculate_time"}:
+                action_input = "1/2" if name == "fraction_to_decimal" else ("0.5" if name in {"convert_decimal_percentage", "decimal_to_fraction", "format_bytes", "format_number_commas", "parse_number_locale"} else ("50%" if name in {"convert_percentage_decimal", "convert_fraction_decimal"} else "1500"))
+            elif name == "extract_env_variable_names":
+                action_input = "export TEST_KEY=hello\\nOTHER_VALUE=world"
+            elif name == "extract_functions":
+                action_input = "def example():\\n    return 1\\nfunction sample() {}"
+            elif name == "extract_bracketed_text":
+                action_input = "value [inside] and (outside)"
+            elif name == "extract_quoted_text":
+                action_input = 'value "quoted" and \'single\''
+            elif name == "extract_emojis":
+                action_input = "hello 😀 🌍"
+            elif name == "extract_ip_addresses":
+                action_input = "IPs 192.168.1.1 and 2001:db8::1"
+            elif name == "extract_list_items":
+                action_input = "- one\\n2. two"
+            elif name == "extract_markdown_tables":
+                action_input = "| name | age |\\n| --- | --- |\\n| Alice | 30 |"
+            elif name == "find_email_domains":
+                action_input = "person@example.com other@sample.org"
+            elif name == "extract_urls_domains":
+                action_input = "https://example.com/path and https://sample.org"
+            result = execute_extended({**common_arguments, "input": action_input, "action": name})
             if not isinstance(result, dict) or not isinstance(result.get("status"), str):
                 failures.append(f"{name}: no structured result")
         except Exception as exc:  # report every action rather than stopping at the first

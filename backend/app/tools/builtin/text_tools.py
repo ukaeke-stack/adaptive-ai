@@ -31,8 +31,6 @@ def _text(step: dict) -> str:
         raise ValueError("Input must be text.")
     if len(value) > MAX_TEXT:
         raise ValueError(f"Text is too large; maximum is {MAX_TEXT} characters.")
-    if not value.strip():
-        raise ValueError("Provide text in the task context before running this action.")
     return value
 
 
@@ -51,6 +49,8 @@ def execute_extended(step: dict) -> dict | None:
         return None
 
     value = _text(step)
+    if not value.strip():
+        return {"status": "needs_input", "message": "Add text in the task context before running this step."}
     if action == "count_characters":
         return {"status": "succeeded", "characters_including_spaces": len(value),
                 "characters_excluding_whitespace": sum(not c.isspace() for c in value),

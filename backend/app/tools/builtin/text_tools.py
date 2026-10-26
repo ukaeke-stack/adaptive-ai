@@ -280,6 +280,252 @@ def execute_extended(step: dict) -> dict | None:
         return {"status": "succeeded", "hashtags": list(dict.fromkeys(re.findall(r"(?<!\w)#[\w]+", value)))[:MAX_ITEMS]}
     if action == "extract_mentions":
         return {"status": "succeeded", "mentions": list(dict.fromkeys(re.findall(r"(?<!\w)@[A-Za-z0-9_.]{1,64}", value)))[:MAX_ITEMS]}
+
+    # Additional deterministic productivity helpers. All input and output are bounded.
+    if action == "extract_emails":
+        return {"status": "succeeded", "emails": list(dict.fromkeys(re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", value, re.I)))[:MAX_ITEMS]}
+    if action == "extract_phone_numbers":
+        matches = re.findall(r"(?<!\\w)\\+?\\d[\\d ().-]{6,}\\d(?!\\w)", value)
+        phones = list(dict.fromkeys(" ".join(x.split()) for x in matches if 7 <= sum(c.isdigit() for c in x) <= 15))
+        return {"status": "succeeded", "phone_numbers": phones[:MAX_ITEMS]}
+    if action == "extract_ipv4_addresses":
+        candidates = re.findall(r"(?<![\\w.])(?:\\d{1,3}\\.){3}\\d{1,3}(?![\\w.])", value)
+        valid = []
+        for candidate in candidates:
+            parts = candidate.split(".")
+            if all(0 <= int(part) <= 255 for part in parts):
+                valid.append(candidate)
+        return {"status": "succeeded", "addresses": list(dict.fromkeys(valid))[:MAX_ITEMS]}
+    if action == "extract_file_paths":
+        paths = re.findall(r"(?<!\\w)(?:/[\\w. -]+)+/?|[A-Za-z]:\\\\(?:[^\\\\<>:\"|?*]+\\\\?)+", value)
+        return {"status": "succeeded", "paths": list(dict.fromkeys(paths))[:MAX_ITEMS]}
+    if action == "extract_code_blocks":
+        blocks = re.findall(r"```[^\\n]*\\n(.*?)```", value, re.S)
+        return {"status": "succeeded", "code_blocks": blocks[:100], "count": len(blocks)}
+    if action == "extract_markdown_tables":
+        tables, current = [], []
+        for line in value.splitlines():
+            if line.strip().startswith("|") and line.strip().endswith("|"):
+                current.append(line)
+            elif current:
+                tables.append("\\n".join(current)); current = []
+        if current: tables.append("\\n".join(current))
+        return {"status": "succeeded", "tables": tables[:50], "count": len(tables)}
+    if action == "extract_html_links":
+        links = re.findall(r"(?is)<a\\b[^>]*href\\s*=\\s*[\"']?([^\"'\\s>]+)[^\"']*[\"']?[^>]*>(.*?)</a\\s*>", value)
+        return {"status": "succeeded", "links": [{"url": u[:2000], "text": re.sub(r"<[^>]*>", "", t).strip()[:500]} for u,t in links[:MAX_ITEMS]]}
+    if action == "extract_html_images":
+        images = re.findall(r"(?is)<img\\b[^>]*?src\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>", value)
+        return {"status": "succeeded", "images": list(dict.fromkeys(images))[:MAX_ITEMS]}
+    if action == "markdown_to_plain_text":
+        plain = re.sub(r"!?(\\[([^\\]]*)\\])\\([^)]*\\)", lambda m: m.group(2), value)
+        plain = re.sub(r"(?m)^\\s{0,3}#{1,6}\\s*", "", plain)
+        plain = re.sub(r"(?m)^\\s*[-*+]\\s+", "", plain)
+        plain = re.sub(r"[*_~`]", "", plain)
+        return {"status": "succeeded", "text": plain[:MAX_TEXT]}
+    if action == "json_to_yaml_preview":
+        try: obj = json.loads(value)
+        except json.JSONDecodeError as exc: return {"status": "failed", "message": f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        def yaml_lines(obj, indent=0):
+            pad = " " * indent
+            if isinstance(obj, dict):
+                out = []
+                for key, val in list(obj.items())[:MAX_ITEMS]:
+                    if isinstance(val, (dict, list)): out.append(f"{pad}{key}:"); out.extend(yaml_lines(val, indent+2))
+                    else: out.append(f"{pad}{key}: {json.dumps(val, ensure_ascii=False)}")
+                return out
+            if isinstance(obj, list):
+                out = []
+                for val in obj[:MAX_ITEMS]:
+                    if isinstance(val, (dict, list)): out.append(f"{pad}-"); out.extend(yaml_lines(val, indent+2))
+                    else: out.append(f"{pad}- {json.dumps(val, ensure_ascii=False)}")
+                return out
+            return [pad + json.dumps(obj, ensure_ascii=False)]
+        return {"status": "succeeded", "yaml_preview": "\\n".join(yaml_lines(obj))[:MAX_TEXT], "note": "Preview uses JSON scalar quoting; review before using as production YAML."}
+    if action == "count_words_by_line":
+        rows = [{"line": i, "words": len(re.findall(r"\\S+", line))} for i,line in enumerate(value.splitlines(), 1)]
+        return {"status": "succeeded", "lines": rows[:MAX_ITEMS], "line_count": len(rows)}
+    if action == "paragraph_count":
+        paragraphs = [p for p in re.split(r"\\n\\s*\\n", value.strip()) if p.strip()]
+        return {"status": "succeeded", "paragraph_count": len(paragraphs)}
+    if action == "find_duplicate_words":
+        words = re.findall(r"[\\w’'-]+", value.casefold())
+        counts = Counter(words)
+        return {"status": "succeeded", "duplicates": [{"word": w, "count": n} for w,n in counts.items() if n > 1][:MAX_ITEMS]}
+    if action == "find_long_words":
+        minimum = step.get("minimum_length", 10)
+        try: minimum = int(minimum)
+        except (TypeError, ValueError): minimum = 10
+        if not 2 <= minimum <= 100: return {"status": "failed", "message": "minimum_length must be from 2 to 100."}
+        words = re.findall(r"[^\\W\\d_]+", value, re.UNICODE)
+        return {"status": "succeeded", "minimum_length": minimum, "words": list(dict.fromkeys(w for w in words if len(w) >= minimum))[:MAX_ITEMS]}
+    if action == "alphabetize_words":
+        words = re.findall(r"\\S+", value)
+        return {"status": "succeeded", "words": sorted(words, key=str.casefold)[:MAX_ITEMS], "count": len(words)}
+    if action == "remove_empty_lines":
+        lines = [line for line in value.splitlines() if line.strip()]
+        return {"status": "succeeded", "text": "\\n".join(lines)[:MAX_TEXT], "removed": len(value.splitlines())-len(lines)}
+    if action == "number_lines":
+        lines = value.splitlines()
+        return {"status": "succeeded", "text": "\\n".join(f"{i}. {line}" for i,line in enumerate(lines,1))[:MAX_TEXT], "line_count": len(lines)}
+    if action == "indent_text":
+        prefix = step.get("prefix", "    ")
+        if not isinstance(prefix, str) or len(prefix) > 40: return {"status": "failed", "message": "prefix must be text up to 40 characters."}
+        return {"status": "succeeded", "text": "\\n".join(prefix+line for line in value.splitlines())[:MAX_TEXT]}
+    if action == "dedent_text":
+        return {"status": "succeeded", "text": textwrap.dedent(value)[:MAX_TEXT]}
+    if action == "truncate_text":
+        try: limit = int(step.get("limit", 500))
+        except (TypeError, ValueError): limit = 500
+        if not 1 <= limit <= MAX_TEXT: return {"status": "failed", "message": "limit must be between 1 and 120000."}
+        return {"status": "succeeded", "text": value[:limit], "truncated": len(value)>limit, "original_length": len(value)}
+    if action == "mask_text":
+        try: visible = int(step.get("visible_characters", 4))
+        except (TypeError, ValueError): visible = 4
+        if not 0 <= visible <= 20: return {"status": "failed", "message": "visible_characters must be between 0 and 20."}
+        return {"status": "succeeded", "text": "*"*max(0,len(value)-visible)+value[-visible:] if visible else "*"*len(value)}
+    if action == "extract_quoted_text":
+        matches = re.findall(r'["“”](.+?)["“”]|[\'‘’](.+?)[\'‘’]', value)
+        return {"status": "succeeded", "quoted_text": [(a or b) for a,b in matches][:MAX_ITEMS]}
+    if action == "extract_bracketed_text":
+        return {"status": "succeeded", "bracketed_text": re.findall(r"\\(([^()]*)\\)|\\[([^\\[\\]]*)\\]|\\{([^{}]*)\\}", value)[:MAX_ITEMS]}
+    if action == "extract_dates_iso":
+        dates = re.findall(r"\\b\\d{4}-\\d{2}-\\d{2}(?:[T ]\\d{2}:\\d{2}(?::\\d{2})?(?:Z|[+-]\\d{2}:?\\d{2})?)?\\b", value)
+        return {"status": "succeeded", "dates": list(dict.fromkeys(dates))[:MAX_ITEMS]}
+    if action == "extract_currency_amounts":
+        amounts = re.findall(r"(?<!\\w)(?:[$€£₦]|USD|EUR|GBP|NGN)\\s?\\d[\\d,]*(?:\\.\\d{1,2})?", value, re.I)
+        return {"status": "succeeded", "amounts": list(dict.fromkeys(amounts))[:MAX_ITEMS], "note": "Pattern extraction only; currency context may be ambiguous."}
+    if action == "extract_emojis":
+        chars = [c for c in value if ord(c) >= 0x1F000]
+        return {"status": "succeeded", "symbols": list(dict.fromkeys(chars))[:MAX_ITEMS]}
+    if action == "validate_email_list":
+        candidates = [x.strip() for x in value.replace(",", "\\n").splitlines() if x.strip()]
+        valid = [x for x in candidates if re.fullmatch(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", x, re.I)]
+        return {"status": "succeeded", "valid": valid[:MAX_ITEMS], "invalid": [x for x in candidates if x not in valid][:MAX_ITEMS], "valid_count": len(valid), "invalid_count": len(candidates)-len(valid)}
+    if action == "validate_ipv4":
+        candidate = value.strip()
+        parts = candidate.split(".")
+        valid = len(parts)==4 and all(p.isdigit() and (p=="0" or not p.startswith("0")) and 0<=int(p)<=255 for p in parts)
+        return {"status": "succeeded", "valid": valid, "address": candidate}
+    if action == "validate_uuid":
+        import uuid
+        try: normalized = str(uuid.UUID(value.strip())); valid = True
+        except (ValueError, AttributeError, TypeError): normalized = None; valid = False
+        return {"status": "succeeded", "valid": valid, "normalized": normalized}
+    if action == "generate_table_of_contents":
+        headings = [{"level": len(m.group(1)), "title": m.group(2).strip()} for line in value.splitlines() if (m := re.match(r"^\\s{0,3}(#{1,6})\\s+(.+?)\\s*#*\\s*$", line))]
+        return {"status": "succeeded", "markdown_toc": "\\n".join("  "*(h["level"]-1)+f"- [{h['title']}](#{re.sub(r'[^a-z0-9 -]', '', h['title'].casefold()).strip().replace(' ', '-')})" for h in headings[:MAX_ITEMS]), "heading_count": len(headings)}
+    if action == "markdown_to_html_safe":
+        escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        escaped = re.sub(r"(?m)^### (.+)$", r"<h3>\\1</h3>", escaped)
+        escaped = re.sub(r"(?m)^## (.+)$", r"<h2>\\1</h2>", escaped)
+        escaped = re.sub(r"(?m)^# (.+)$", r"<h1>\\1</h1>", escaped)
+        escaped = re.sub(r"\\*\\*(.+?)\\*\\*", r"<strong>\\1</strong>", escaped)
+        return {"status": "succeeded", "html": escaped.replace("\\n", "<br>")[:MAX_TEXT], "note": "Safe subset conversion; raw HTML is escaped."}
+    if action == "html_escape":
+        return {"status": "succeeded", "text": value.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;").replace("'","&#x27;")}
+    if action == "url_encode_text":
+        from urllib.parse import quote
+        return {"status": "succeeded", "text": quote(value, safe="")[:MAX_TEXT]}
+    if action == "url_decode_text":
+        from urllib.parse import unquote
+        return {"status": "succeeded", "text": unquote(value)[:MAX_TEXT]}
+    if action == "unicode_normalize":
+        form = step.get("form", "NFC")
+        if form not in {"NFC", "NFD", "NFKC", "NFKD"}: return {"status": "failed", "message": "form must be NFC, NFD, NFKC, or NFKD."}
+        return {"status": "succeeded", "text": unicodedata.normalize(form, value)}
+    if action in {"json_to_csv", "csv_column_stats", "csv_filter_rows", "csv_sort_rows", "csv_deduplicate_rows", "csv_select_columns"}:
+        try:
+            rows_obj = json.loads(value)
+            if not isinstance(rows_obj, list) or any(not isinstance(row, dict) for row in rows_obj): raise ValueError()
+            fields = list(dict.fromkeys(k for row in rows_obj[:MAX_ROWS] for k in row.keys()))
+            rows = rows_obj[:MAX_ROWS]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return {"status": "failed", "message": "Input must be a JSON array of objects."}
+        if action == "csv_column_stats":
+            return {"status": "succeeded", "columns": [{"name": k, "non_empty": sum(row.get(k) not in (None,"") for row in rows), "distinct": len({str(row.get(k)) for row in rows})} for k in fields[:100]], "row_count": len(rows)}
+        if action == "csv_filter_rows":
+            col, contains = step.get("column"), step.get("contains", "")
+            if col not in fields or not isinstance(contains, str): return {"status": "failed", "message": "Provide a valid column and text contains filter."}
+            rows = [r for r in rows if contains.casefold() in str(r.get(col, "")).casefold()]
+        elif action == "csv_sort_rows":
+            col = step.get("column")
+            if col not in fields: return {"status": "failed", "message": "Provide a valid sort column."}
+            rows = sorted(rows, key=lambda r: str(r.get(col, "")).casefold(), reverse=bool(step.get("descending", False)))
+        elif action == "csv_deduplicate_rows":
+            seen, unique = set(), []
+            for row in rows:
+                key = json.dumps(row, sort_keys=True, ensure_ascii=False)
+                if key not in seen: seen.add(key); unique.append(row)
+            rows = unique
+        elif action == "csv_select_columns":
+            selected = step.get("columns")
+            if not isinstance(selected, list) or not selected or any(c not in fields for c in selected): return {"status": "failed", "message": "columns must be a non-empty list of existing column names."}
+            fields = selected
+            rows = [{k: row.get(k) for k in fields} for row in rows]
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+        return {"status": "succeeded", "csv": buffer.getvalue()[:MAX_TEXT], "row_count": len(rows), "columns": fields}
+    if action == "diff_summary":
+        other = step.get("second_input", "")
+        if not isinstance(other, str): return {"status": "failed", "message": "second_input must be text."}
+        diff = list(difflib.unified_diff(value.splitlines(), other.splitlines(), fromfile="first", tofile="second", lineterm=""))
+        return {"status": "succeeded", "diff": "\\n".join(diff[:MAX_ITEMS])[:MAX_TEXT], "added_lines": sum(x.startswith("+") and not x.startswith("+++") for x in diff), "removed_lines": sum(x.startswith("-") and not x.startswith("---") for x in diff)}
+    if action == "text_statistics":
+        words = re.findall(r"\\S+", value)
+        sentences = [x for x in re.split(r"(?<=[.!?])\\s+", value.strip()) if x]
+        return {"status": "succeeded", "characters": len(value), "words": len(words), "lines": len(value.splitlines()), "paragraphs": len([p for p in re.split(r"\\n\\s*\\n", value.strip()) if p.strip()]), "sentences": len(sentences), "unique_words": len(set(w.casefold() for w in words))}
+    if action == "extract_initials":
+        words = re.findall(r"[^\\W\\d_]+", value, re.UNICODE)
+        return {"status": "succeeded", "initials": "".join(w[0].upper() for w in words)}
+    if action == "make_acronym":
+        words = re.findall(r"[^\\W\\d_]+", value, re.UNICODE)
+        return {"status": "succeeded", "acronym": "".join(w[0].upper() for w in words), "word_count": len(words)}
+    if action == "expand_tabs":
+        try: width = int(step.get("tab_size", 4))
+        except (TypeError, ValueError): width = 4
+        if not 1 <= width <= 16: return {"status": "failed", "message": "tab_size must be from 1 to 16."}
+        return {"status": "succeeded", "text": value.expandtabs(width)[:MAX_TEXT]}
+    if action == "remove_control_characters":
+        cleaned = "".join(c for c in value if c in "\\n\\r\\t" or unicodedata.category(c)[0] != "C")
+        return {"status": "succeeded", "text": cleaned[:MAX_TEXT], "removed": len(value)-len(cleaned)}
+    if action == "normalize_newlines":
+        return {"status": "succeeded", "text": re.sub(r"\\r\\n?|\\n", "\\n", value)[:MAX_TEXT]}
+    if action == "count_occurrences":
+        needle = step.get("needle", "")
+        if not isinstance(needle, str) or not needle: return {"status": "failed", "message": "Provide a non-empty needle."}
+        return {"status": "succeeded", "count": value.count(needle), "case_insensitive_count": value.casefold().count(needle.casefold())}
+    if action in {"extract_lines_matching", "exclude_lines_matching"}:
+        pattern = step.get("pattern", "")
+        if not isinstance(pattern, str) or len(pattern) > 200: return {"status": "failed", "message": "Provide a regex pattern up to 200 characters."}
+        try: rx = re.compile(pattern, re.I if step.get("ignore_case") else 0)
+        except re.error as exc: return {"status": "failed", "message": f"Invalid regular expression: {exc}"}
+        lines = [line for line in value.splitlines() if bool(rx.search(line)) == (action == "extract_lines_matching")]
+        return {"status": "succeeded", "lines": lines[:MAX_ITEMS], "count": len(lines), "truncated": len(lines)>MAX_ITEMS}
+    if action in {"prefix_lines", "suffix_lines"}:
+        affix = step.get("affix", "")
+        if not isinstance(affix, str) or len(affix) > 200: return {"status": "failed", "message": "affix must be text up to 200 characters."}
+        lines = value.splitlines()
+        return {"status": "succeeded", "text": "\\n".join((affix+line if action=="prefix_lines" else line+affix) for line in lines)[:MAX_TEXT]}
+    if action == "join_lines":
+        separator = step.get("separator", ", ")
+        if not isinstance(separator, str) or len(separator)>100: return {"status": "failed", "message": "separator must be text up to 100 characters."}
+        return {"status": "succeeded", "text": separator.join(value.splitlines())[:MAX_TEXT]}
+    if action == "split_words":
+        words = re.findall(r"\\S+", value)
+        return {"status": "succeeded", "words": words[:MAX_ITEMS], "count": len(words), "truncated": len(words)>MAX_ITEMS}
+    if action == "reverse_words":
+        words = re.findall(r"\\S+", value)
+        return {"status": "succeeded", "text": " ".join(reversed(words))[:MAX_TEXT], "word_count": len(words)}
+    if action == "shuffle_preview":
+        # Deterministic preview: rotate by half; avoids randomness in an auditable tool.
+        words = value.splitlines()
+        if len(words) > 1:
+            shift = len(words)//2
+            words = words[shift:] + words[:shift]
+        return {"status": "succeeded", "lines": words[:MAX_ITEMS], "note": "Deterministic rotated preview, not a random shuffle."}
     return None
 
 

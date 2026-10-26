@@ -1386,7 +1386,7 @@ def execute_extra(action, step, value):
         emails = re.findall(r"[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})", value, re.I)
         return {"status": "succeeded", "domains": list(dict.fromkeys(x.lower() for x in emails))[:MAX_ITEMS]}
     if action == "extract_urls_domains":
-        urls = re.findall(r"https?://[^\s<>\\"']+", value, re.I)
+        urls = re.findall(r"https?://\\S+", value, re.I)
         domains = []
         for url in urls:
             try:

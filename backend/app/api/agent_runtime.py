@@ -183,6 +183,9 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
                  "reason": "Multi-step plans are limited to five supported actions. No action was executed."}]
     for index, step in enumerate(combined, start=1):
         step["id"] = f"step-{index}"
+        if index > 1 and combined[index - 2].get("action") == "web_search" and step.get("action") in TEXT_ACTIONS:
+            step["input_from_previous"] = True
+            step.pop("requires_context", None)
     return combined
 
 def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
@@ -301,6 +304,25 @@ def _calculate(expression: str) -> float | int:
         return round(result, 10)
     return int(result) if isinstance(result, float) else result
 
+
+
+
+def _result_as_text(result: dict) -> str:
+    """Convert a previous safe result into bounded plain text for a dependent step."""
+    if isinstance(result.get("results"), list):
+        pieces = []
+        for item in result["results"][:10]:
+            if isinstance(item, dict):
+                pieces.append("\\n".join(str(item.get(key, "")) for key in ("title", "snippet", "url") if item.get(key)))
+        return "\\n\\n".join(pieces)[:12000]
+    for key in ("text", "summary", "draft"):
+        value = result.get(key)
+        if isinstance(value, str) and value.strip():
+            return value[:12000]
+    bullets = result.get("bullets")
+    if isinstance(bullets, list):
+        return "\\n".join(str(item) for item in bullets[:100])[:12000]
+    return json.dumps(result, ensure_ascii=False)[:12000]
 
 def _execute_step(step: dict) -> dict:
     action = step.get("action")
@@ -448,6 +470,9 @@ def run_task(task_id: str, request: Request):
     results = []
     for step in plan:
         execution_step = dict(step)
+        if step.get("input_from_previous") and results:
+            execution_step["input"] = _result_as_text(results[-1]["result"])
+            execution_step.pop("requires_context", None)
         execution_step["_user_id"] = user["id"]
         result = _execute_step(execution_step)
         results.append({"step_id": step["id"], "action": step["action"], "result": result, "completed_at": _now()})

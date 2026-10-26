@@ -281,3 +281,27 @@ def execute_extended(step: dict) -> dict | None:
     if action == "extract_mentions":
         return {"status": "succeeded", "mentions": list(dict.fromkeys(re.findall(r"(?<!\w)@[A-Za-z0-9_.]{1,64}", value)))[:MAX_ITEMS]}
     return None
+
+
+# Additional bounded productivity actions.
+# These actions operate only on explicitly supplied content and never access external accounts.
+EXTENDED_ACTIONS.update({
+    "extract_emails", "extract_phone_numbers", "extract_ipv4_addresses",
+    "extract_file_paths", "extract_code_blocks", "extract_markdown_tables",
+    "extract_html_links", "extract_html_images", "markdown_to_plain_text",
+    "json_to_yaml_preview", "count_words_by_line", "paragraph_count",
+    "find_duplicate_words", "find_long_words", "alphabetize_words",
+    "remove_empty_lines", "number_lines", "indent_text", "dedent_text",
+    "truncate_text", "mask_text", "extract_quoted_text", "extract_bracketed_text",
+    "extract_dates_iso", "extract_currency_amounts", "extract_emojis",
+    "validate_email_list", "validate_ipv4", "validate_uuid",
+    "generate_table_of_contents", "markdown_to_html_safe", "html_escape",
+    "url_encode_text", "url_decode_text", "unicode_normalize",
+    "json_to_csv", "csv_column_stats", "csv_filter_rows",
+    "csv_sort_rows", "csv_deduplicate_rows", "csv_select_columns",
+    "diff_summary", "text_statistics", "extract_initials",
+    "make_acronym", "expand_tabs", "remove_control_characters",
+    "normalize_newlines", "count_occurrences", "extract_lines_matching",
+    "exclude_lines_matching", "prefix_lines", "suffix_lines",
+    "join_lines", "split_words", "reverse_words", "shuffle_preview",
+})

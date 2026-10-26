@@ -123,6 +123,8 @@ def test_every_declared_extended_action_reaches_a_result_without_uncaught_errors
             result = execute_extended({**common_arguments, "input": action_input, "action": name})
             if not isinstance(result, dict) or not isinstance(result.get("status"), str):
                 failures.append(f"{name}: no structured result")
+            elif result["status"] not in {"succeeded", "failed", "needs_input", "blocked"}:
+                failures.append(f"{name}: unrecognized status {result['status']!r}")
         except Exception as exc:  # report every action rather than stopping at the first
             failures.append(f"{name}: {type(exc).__name__}: {exc}")
     assert not failures, "\n".join(failures)

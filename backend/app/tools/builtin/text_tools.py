@@ -608,6 +608,177 @@ def execute_extended(step: dict) -> dict | None:
     if action == "extract_sql_tables":
         tables = re.findall(r"(?i)\\b(?:from|join|into|update|table)\\s+([A-Za-z_][\\w.]*)", value)
         return {"status": "succeeded", "tables": list(dict.fromkeys(tables))[:MAX_ITEMS]}
+
+    if action in {"json_query", "extract_json_paths", "json_filter_array", "json_sort_array", "json_unique_array", "json_to_markdown_table"}:
+        try:
+            obj = json.loads(value)
+        except json.JSONDecodeError as exc:
+            return {"status": "failed", "message": f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        if action == "json_query":
+            path = step.get("path", "")
+            current = obj
+            try:
+                for part in path.strip(".").split(".") if path else []:
+                    if isinstance(current, list): current = current[int(part)]
+                    elif isinstance(current, dict): current = current[part]
+                    else: raise KeyError(part)
+            except (KeyError, IndexError, ValueError, TypeError):
+                return {"status": "failed", "message": "The requested JSON path does not exist."}
+            return {"status": "succeeded", "value": current}
+        if action == "extract_json_paths":
+            paths = []
+            def walk_json(node, prefix="$"):
+                if len(paths) >= MAX_ITEMS: return
+                if isinstance(node, dict):
+                    for key, child in node.items(): walk_json(child, prefix+"."+str(key))
+                elif isinstance(node, list):
+                    for i, child in enumerate(node): walk_json(child, prefix+"["+str(i)+"]")
+                else: paths.append({"path": prefix, "type": type(node).__name__})
+            walk_json(obj)
+            return {"status": "succeeded", "paths": paths}
+        if action in {"json_filter_array", "json_sort_array", "json_unique_array"}:
+            if not isinstance(obj, list): return {"status": "failed", "message": "JSON root must be an array."}
+            if action == "json_filter_array":
+                key, contains = step.get("key"), str(step.get("contains", ""))
+                filtered = [item for item in obj if isinstance(item, dict) and key in item and contains.casefold() in str(item[key]).casefold()]
+                return {"status": "succeeded", "items": filtered[:MAX_ITEMS], "count": len(filtered)}
+            if action == "json_sort_array":
+                key = step.get("key")
+                ordered = sorted(obj, key=lambda item: str(item.get(key, "") if isinstance(item, dict) else item).casefold(), reverse=bool(step.get("descending", False)))
+                return {"status": "succeeded", "items": ordered[:MAX_ITEMS], "count": len(ordered)}
+            seen, unique = set(), []
+            for item in obj:
+                signature = json.dumps(item, sort_keys=True, ensure_ascii=False)
+                if signature not in seen: seen.add(signature); unique.append(item)
+            return {"status": "succeeded", "items": unique[:MAX_ITEMS], "count": len(unique)}
+        if not isinstance(obj, list) or not obj or any(not isinstance(item, dict) for item in obj):
+            return {"status": "failed", "message": "JSON root must be a non-empty array of objects."}
+        columns = list(dict.fromkeys(k for item in obj[:MAX_ROWS] for k in item))
+        def cell(value):
+            return str(value if value is not None else "").replace("|", "\\|").replace("\\n", " ")
+        table = "| " + " | ".join(columns) + " |\\n| " + " | ".join("---" for _ in columns) + " |\\n"
+        table += "".join("| " + " | ".join(cell(row.get(k)) for k in columns) + " |\\n" for row in obj[:200])
+        return {"status": "succeeded", "markdown_table": table[:MAX_TEXT], "rows_included": min(len(obj), 200)}
+    if action == "markdown_table_to_csv":
+        rows = []
+        for line in value.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("|") and stripped.endswith("|"):
+                cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+                if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+                    rows.append(cells)
+        if not rows: return {"status": "failed", "message": "No Markdown table rows found."}
+        width = max(len(row) for row in rows)
+        rows = [row + [""]*(width-len(row)) for row in rows]
+        output = io.StringIO(); csv.writer(output).writerows(rows[:MAX_ROWS])
+        return {"status": "succeeded", "csv": output.getvalue()[:MAX_TEXT], "row_count": len(rows)}
+    if action == "extract_csv_emails":
+        try: rows = list(csv.DictReader(io.StringIO(value)))[:MAX_ROWS]
+        except csv.Error as exc: return {"status": "failed", "message": str(exc)}
+        found = []
+        for row in rows:
+            for cell in row.values():
+                if cell:
+                    found.extend(re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", cell, re.I))
+        return {"status": "succeeded", "emails": list(dict.fromkeys(found))[:MAX_ITEMS], "count": len(set(found))}
+    if action in {"csv_column_rename", "csv_column_remove"}:
+        try: rows = list(csv.DictReader(io.StringIO(value)))[:MAX_ROWS]
+        except csv.Error as exc: return {"status": "failed", "message": str(exc)}
+        if not rows: return {"status": "failed", "message": "CSV must include headers and rows."}
+        old_name = step.get("column")
+        fields = list(rows[0].keys())
+        if old_name not in fields: return {"status": "failed", "message": "Column does not exist."}
+        if action == "csv_column_remove":
+            fields = [name for name in fields if name != old_name]
+            rows = [{k:v for k,v in row.items() if k != old_name} for row in rows]
+        else:
+            new_name = step.get("new_name")
+            if not isinstance(new_name, str) or not new_name.strip() or new_name in fields: return {"status": "failed", "message": "new_name must be non-empty and unique."}
+            fields = [new_name if name == old_name else name for name in fields]
+            rows = [{(new_name if k == old_name else k):v for k,v in row.items()} for row in rows]
+        output = io.StringIO(); writer = csv.DictWriter(output, fieldnames=fields); writer.writeheader(); writer.writerows(rows)
+        return {"status": "succeeded", "csv": output.getvalue()[:MAX_TEXT], "columns": fields, "row_count": len(rows)}
+    if action == "csv_rows_to_json":
+        try: rows = list(csv.DictReader(io.StringIO(value)))[:MAX_ROWS]
+        except csv.Error as exc: return {"status": "failed", "message": str(exc)}
+        if not rows: return {"status": "failed", "message": "CSV must include a header row."}
+        return {"status": "succeeded", "json": json.dumps(rows, ensure_ascii=False)[:MAX_TEXT], "row_count": len(rows)}
+    if action == "json_to_xml_preview":
+        try: obj = json.loads(value)
+        except json.JSONDecodeError as exc: return {"status": "failed", "message": f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        def xml_safe(s):
+            return str(s).replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;").replace("'","&apos;")
+        def to_xml(tag, node, depth=0):
+            if depth > 20: return ""
+            tag = re.sub(r"[^A-Za-z0-9_.-]", "_", str(tag)) or "item"
+            if isinstance(node, dict): inner = "".join(to_xml(k,v,depth+1) for k,v in list(node.items())[:MAX_ITEMS])
+            elif isinstance(node, list): inner = "".join(to_xml("item",v,depth+1) for v in node[:MAX_ITEMS])
+            else: inner = xml_safe(json.dumps(node, ensure_ascii=False) if node is None or isinstance(node,bool) else node)
+            return "<"+tag+">"+inner+"</"+tag+">"
+        return {"status": "succeeded", "xml_preview": to_xml("root", obj)[:MAX_TEXT], "note": "Preview only; validate XML before production use."}
+    if action == "extract_xml_attributes":
+        pairs = []
+        for tag in re.findall(r"<[^>]+>", value):
+            name = re.match(r"<([A-Za-z_][\\w:.-]*)", tag)
+            attrs = re.findall(r"""([A-Za-z_:][\\w:.-]*)\\s*=\\s*["']([^"']*)["']""", tag)
+            for key, val in attrs: pairs.append({"tag": name.group(1) if name else "", "attribute": key, "value": val})
+        return {"status": "succeeded", "attributes": pairs[:MAX_ITEMS], "count": len(pairs)}
+    if action == "extract_html_forms":
+        forms = re.findall(r"(?is)<form\\b[^>]*>.*?</form\\s*>", value)
+        return {"status": "succeeded", "forms": forms[:50], "count": len(forms), "note": "Extracted markup only; forms are not submitted."}
+    if action == "extract_html_scripts":
+        scripts = re.findall(r"(?is)<script\\b[^>]*>(.*?)</script\\s*>", value)
+        sources = re.findall(r"""(?is)<script\\b[^>]*\\bsrc\\s*=\\s*["']([^"']+)["']""", value)
+        return {"status": "succeeded", "inline_scripts": scripts[:20], "sources": sources[:MAX_ITEMS], "count": len(scripts)+len(sources)}
+    if action == "extract_css_urls":
+        urls = re.findall(r"""(?i)url\\(\\s*["']?([^)"']+)""", value)
+        return {"status": "succeeded", "urls": list(dict.fromkeys(x.strip() for x in urls))[:MAX_ITEMS]}
+    if action == "extract_sql_statements":
+        statements = [part.strip() for part in value.split(";") if part.strip()]
+        return {"status": "succeeded", "statements": statements[:MAX_ITEMS], "count": len(statements), "note": "SQL text is split only; no statement is executed."}
+    if action == "extract_markdown_images":
+        images = [{"alt": alt, "url": url} for alt, url in re.findall(r"!\\[([^\\]]*)\\]\\(([^)]+)\\)", value)]
+        return {"status": "succeeded", "images": images[:MAX_ITEMS], "count": len(images)}
+    if action == "markdown_heading_slugs":
+        headings = []
+        for line in value.splitlines():
+            match = re.match(r"^\\s{0,3}(#{1,6})\\s+(.+?)\\s*#*\\s*$", line)
+            if match:
+                title = match.group(2).strip()
+                slug = re.sub(r"[^a-z0-9 -]", "", title.casefold()).strip().replace(" ", "-")
+                headings.append({"title": title, "level": len(match.group(1)), "slug": slug})
+        return {"status": "succeeded", "headings": headings[:MAX_ITEMS], "count": len(headings)}
+    if action == "text_to_html_paragraphs":
+        paragraphs = [p.strip() for p in re.split(r"\\n\\s*\\n", value.strip()) if p.strip()]
+        escaped = [p.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;").replace("'","&#x27;") for p in paragraphs]
+        return {"status": "succeeded", "html": "".join("<p>"+p.replace("\\n","<br>")+"</p>" for p in escaped)[:MAX_TEXT], "paragraph_count": len(paragraphs)}
+    if action == "count_sentiment_terms":
+        positive = {"good","great","excellent","happy","love","helpful","success","positive","best","wonderful","thanks"}
+        negative = {"bad","poor","hate","sad","fail","failure","negative","worst","angry","broken","terrible"}
+        words = set(re.findall(r"[a-z]+", value.casefold()))
+        pos, neg = sorted(words & positive), sorted(words & negative)
+        return {"status": "succeeded", "positive_terms": pos, "negative_terms": neg, "positive_count": sum(value.casefold().count(w) for w in pos), "negative_count": sum(value.casefold().count(w) for w in neg), "note": "Lexicon-based signal only, not a reliable sentiment model."}
+    if action == "readability_estimate":
+        words = re.findall(r"\\S+", value)
+        sentences = max(1, len([s for s in re.split(r"(?<=[.!?])\\s+", value.strip()) if s]))
+        syllables = 0
+        for word in re.findall(r"[A-Za-z]+", value):
+            chunks = re.findall(r"[aeiouy]+", word.lower())
+            syllables += max(1, len(chunks) - (1 if word.lower().endswith("e") and len(chunks)>1 else 0))
+        wcount = max(1, len(words))
+        score = 206.835 - 1.015*(wcount/sentences) - 84.6*(syllables/wcount)
+        return {"status": "succeeded", "word_count": len(words), "sentence_count": sentences, "estimated_syllables": syllables, "flesch_reading_ease_estimate": round(score,2), "note": "English-oriented heuristic; not suitable as a formal accessibility or education assessment."}
+    if action == "extract_acronyms":
+        acronyms = re.findall(r"\\b[A-Z]{2,}(?:[0-9]+)?\\b", value)
+        return {"status": "succeeded", "acronyms": list(dict.fromkeys(acronyms))[:MAX_ITEMS]}
+    if action == "normalize_phone_candidates":
+        candidates = re.findall(r"(?<!\\w)\\+?\\d[\\d ().-]{6,}\\d(?!\\w)", value)
+        normalized = list(dict.fromkeys(re.sub(r"[^+0-9]", "", item) for item in candidates))
+        normalized = [item for item in normalized if 7 <= sum(ch.isdigit() for ch in item) <= 15]
+        return {"status": "succeeded", "phone_candidates": normalized[:MAX_ITEMS], "note": "Normalization only; not carrier or ownership verification."}
+    if action == "extract_hex_colors":
+        colors = re.findall(r"(?i)(?<![\\w])#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})(?![\\w])", value)
+        return {"status": "succeeded", "colors": list(dict.fromkeys(x.upper() for x in colors))[:MAX_ITEMS]}
     return None
 
 

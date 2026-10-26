@@ -1085,10 +1085,10 @@ def execute_extra(action, step, value):
                 except ValueError:return {"status":"failed","message":"Invalid base conversion input."}
                 return {"status":"succeeded","result":res}
             if action=="calculate_gcd":
-                import math
+
                 b=int(step.get("second_number",nums[1] if len(nums)>1 else 0));return {"status":"succeeded","result":math.gcd(n,b)}
             if action=="calculate_lcm":
-                import math
+
                 b=int(step.get("second_number",nums[1] if len(nums)>1 else 0));return {"status":"succeeded","result":abs(n*b)//math.gcd(n,b) if n and b else 0}
             if action=="integer_to_roman":
                 if not 1<=n<=3999:return {"status":"failed","message":"Roman range is 1–3999."}
@@ -1303,7 +1303,7 @@ def execute_extra(action, step, value):
                 return {"status":"succeeded","seconds":n,"formatted":f"{d}d {h}h {m}m {s}s"}
             return {"status":"succeeded","value":n}
         if action in {"calculate_square_root","calculate_power","calculate_logarithm","calculate_permutation","calculate_combination","calculate_compound_rate","calculate_sales_tax","calculate_average_speed","calculate_distance","calculate_time"}:
-            import math
+
             nums=[float(x) for x in re.findall(r"-?\d+(?:\.\d+)?",value)];a=float(step.get("a",nums[0] if nums else 0));b=float(step.get("b",nums[1] if len(nums)>1 else 0))
             if action=="calculate_square_root":
                 if a<0:return {"status":"failed","message":"Input must be non-negative."}

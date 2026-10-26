@@ -107,6 +107,7 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
         (("extract mentions", "find @mentions", "extract mentions"), "extract_mentions"),
         (("reverse lines", "reverse the line order"), "reverse_lines"),
         (("trim lines", "remove whitespace from lines"), "trim_lines"),
+        (("normalize whitespace", "collapse whitespace", "clean extra spaces"), "normalize_whitespace"),
     ]
     if not plan:
         for phrases, action in extended_patterns:

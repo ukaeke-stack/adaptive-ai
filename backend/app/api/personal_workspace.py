@@ -1,9 +1,12 @@
 """User-scoped notes and to-do items with bounded CRUD and search."""
 from __future__ import annotations
 import json
+import csv
+import io
 from datetime import datetime, timezone
 from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from app.memory.store import _ready_engine
@@ -171,3 +174,30 @@ def delete_todo(todo_id: str, request: Request):
                             {"id":todo_id,"uid":user["id"]})
     if not result.rowcount: raise HTTPException(status_code=404,detail="To-do item not found.")
     return {"deleted":True,"id":todo_id}
+
+
+@router.get("/export")
+def export_workspace(request: Request, format: str = "json"):
+    """Export the signed-in user's notes and to-dos; CSV values are protected from formula injection."""
+    user=require_user(request); _tables()
+    if format not in {"json","csv"}:
+        raise HTTPException(status_code=422,detail="format must be json or csv.")
+    with _ready_engine().connect() as conn:
+        notes=conn.execute(text("SELECT id,title,body,tags_json,created_at,updated_at FROM adaptive_notes WHERE user_id=:uid ORDER BY updated_at DESC LIMIT 1000"),{"uid":user["id"]}).mappings().all()
+        todos=conn.execute(text("SELECT id,title,description,due_at,priority,status,created_at,updated_at FROM adaptive_todos WHERE user_id=:uid ORDER BY updated_at DESC LIMIT 1000"),{"uid":user["id"]}).mappings().all()
+    payload={"notes":[{"id":r["id"],"title":r["title"],"body":r["body"],"tags":json.loads(r["tags_json"]),"created_at":r["created_at"],"updated_at":r["updated_at"]} for r in notes],
+             "todos":[dict(r) for r in todos],"exported_at":_now()}
+    if format=="json":
+        return Response(content=json.dumps(payload,ensure_ascii=False,indent=2),media_type="application/json",
+                        headers={"Content-Disposition":'attachment; filename="norah-workspace-export.json"'})
+    output=io.StringIO(); writer=csv.writer(output)
+    writer.writerow(["record_type","id","title","body_or_description","tags","due_at","priority","status","created_at","updated_at"])
+    def safe_cell(value):
+        value=str(value if value is not None else "")
+        return "'"+value if value.startswith(("=","+","-","@","\\t","\\r")) else value
+    for note in payload["notes"]:
+        writer.writerow([safe_cell(x) for x in ["note",note["id"],note["title"],note["body"],", ".join(note["tags"]),"","","",note["created_at"],note["updated_at"]]])
+    for todo in payload["todos"]:
+        writer.writerow([safe_cell(x) for x in ["todo",todo["id"],todo["title"],todo["description"],"",todo["due_at"],todo["priority"],todo["status"],todo["created_at"],todo["updated_at"]]])
+    return Response(content=output.getvalue(),media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition":'attachment; filename="norah-workspace-export.csv"'})

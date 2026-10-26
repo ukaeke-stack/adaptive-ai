@@ -61,6 +61,12 @@ _AGENT_DESCRIPTIONS = {
 }
 
 
+@router.get("/tools")
+def available_tools():
+    """List tools that can be called directly through POST /tools/execute."""
+    return {"tools": list_tools(), "scope": "Only listed tools are accepted by the direct execution endpoint."}
+
+
 @router.get("/capabilities")
 def capabilities():
     registered = list_tools()

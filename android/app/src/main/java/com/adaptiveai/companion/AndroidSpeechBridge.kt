@@ -24,6 +24,9 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
     @Volatile private var webView: WebView? = null
     private var recognizer: SpeechRecognizer? = null
     @Volatile private var listening = false
+    @Volatile private var recognitionLanguage = "en-NG"
+    @Volatile private var speechRate = 1.0f
+    @Volatile private var speechPitch = 1.0f
     private lateinit var engine: TextToSpeech
 
     init {
@@ -122,8 +125,8 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
                 }
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-NG")
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-NG")
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognitionLanguage)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, recognitionLanguage)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                     putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
@@ -156,8 +159,11 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
         return engine.setLanguage(selected) >= TextToSpeech.LANG_AVAILABLE
     }
 
-    private fun speakNow(text: String): Boolean =
-        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "norah-reply") == TextToSpeech.SUCCESS
+    private fun speakNow(text: String): Boolean {
+        engine.setSpeechRate(speechRate)
+        engine.setPitch(speechPitch)
+        return engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "norah-reply") == TextToSpeech.SUCCESS
+    }
 
     @JavascriptInterface
     fun speak(text: String?): Boolean {
@@ -167,6 +173,42 @@ class AndroidSpeechBridge(context: Context) : AutoCloseable {
         if (initializationComplete) return false
         pendingText = safe
         return true
+    }
+
+
+    /** Set a BCP-47 recognition locale, for example en-NG or fr-FR. */
+    @JavascriptInterface
+    fun setRecognitionLanguage(languageTag: String?): Boolean {
+        val safe = languageTag?.trim()?.take(20).orEmpty()
+        if (!safe.matches(Regex("^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$"))) return false
+        recognitionLanguage = safe
+        return true
+    }
+
+    /** Change speech output rate within conservative bounds. */
+    @JavascriptInterface
+    fun setSpeechRate(rate: Float): Boolean {
+        if (!rate.isFinite() || rate < 0.5f || rate > 2.0f) return false
+        speechRate = rate
+        return true
+    }
+
+    /** Change speech output pitch within conservative bounds. */
+    @JavascriptInterface
+    fun setSpeechPitch(pitch: Float): Boolean {
+        if (!pitch.isFinite() || pitch < 0.5f || pitch > 2.0f) return false
+        speechPitch = pitch
+        return true
+    }
+
+    /** Select an installed text-to-speech locale. */
+    @JavascriptInterface
+    fun setSpeechLanguage(languageTag: String?): Boolean {
+        val safe = languageTag?.trim()?.take(20).orEmpty()
+        if (!safe.matches(Regex("^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$")) || !engineReady) return false
+        val locale = Locale.forLanguageTag(safe)
+        if (engine.isLanguageAvailable(locale) < TextToSpeech.LANG_AVAILABLE) return false
+        return engine.setLanguage(locale) >= TextToSpeech.LANG_AVAILABLE
     }
 
     @JavascriptInterface

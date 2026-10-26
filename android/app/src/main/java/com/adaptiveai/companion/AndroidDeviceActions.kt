@@ -73,6 +73,21 @@ class AndroidDeviceActions(private val context: Context) {
     fun openContacts(): Boolean =
         launch(Intent(Intent.ACTION_VIEW, android.provider.ContactsContract.Contacts.CONTENT_URI),
             "No contacts application is available.")
+    
+    /** Opens Android's contact picker; only the contact selected by the user is returned to Norah. */
+    @JavascriptInterface
+    fun pickContact(): Boolean {
+        val activity = context as? android.app.Activity ?: return false
+        return try {
+            activity.startActivityForResult(
+                Intent(Intent.ACTION_PICK, android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI), 907
+            )
+            true
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "No contact picker is available.", Toast.LENGTH_LONG).show()
+            false
+        }
+    }
 
     /** Opens the system camera UI. Android's camera privacy controls remain in effect. */
     @JavascriptInterface
@@ -134,6 +149,15 @@ class AndroidDeviceActions(private val context: Context) {
         if (safeQuery.isBlank()) return launch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0")), "No maps application is available.")
         return launch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(safeQuery))),
             "No maps application is available.")
+    }
+
+    /** Opens a validated HTTP/HTTPS URL in the browser after the user taps the action. */
+    @JavascriptInterface
+    fun openUrl(url: String?): Boolean {
+        val safe = url?.trim()?.take(2000).orEmpty()
+        val parsed = Uri.parse(safe)
+        if (parsed.scheme !in setOf("http", "https") || parsed.host.isNullOrBlank()) return false
+        return launch(Intent(Intent.ACTION_VIEW, parsed), "No browser is available.")
     }
 
     /** Opens a web search in an installed browser; it does not submit private app data. */
@@ -199,5 +223,120 @@ class AndroidDeviceActions(private val context: Context) {
         }
         return launch(intent, "Could not open notification settings.")
     }
+
+    @JavascriptInterface
+    fun openFiles(): Boolean =
+        launch(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
+            "No document picker is available.")
+
+    @JavascriptInterface
+    fun openCalculator(): Boolean {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALCULATOR)
+        return launch(intent, "No calculator application is available.")
+    }
+
+    @JavascriptInterface
+    fun openPhoneDialer(): Boolean =
+        launch(Intent(Intent.ACTION_DIAL), "No phone dialer is available.")
+
+    @JavascriptInterface
+    fun openEmail(): Boolean =
+        launch(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")),
+            "No email application is available.")
+
+    @JavascriptInterface
+    fun openSystemSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_SETTINGS),
+            "Could not open Android settings.")
+
+    @JavascriptInterface
+    fun openBrowser(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")),
+            "No browser application is available.")
+
+    @JavascriptInterface
+    fun openDownloads(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, MediaStore.Downloads.EXTERNAL_CONTENT_URI),
+            "No downloads viewer is available.")
+
+    @JavascriptInterface
+    fun openYouTube(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com")),
+            "No compatible video app or browser is available.")
+
+    @JavascriptInterface
+    fun openBatterySettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS),
+            "Could not open battery settings.")
+
+    @JavascriptInterface
+    fun openDisplaySettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS),
+            "Could not open display settings.")
+
+    @JavascriptInterface
+    fun openSoundSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_SOUND_SETTINGS),
+            "Could not open sound settings.")
+
+    @JavascriptInterface
+    fun openAccessibilitySettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS),
+            "Could not open accessibility settings.")
+
+    @JavascriptInterface
+    fun openPhotos(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, MediaStore.Images.Media.EXTERNAL_CONTENT_URI),
+            "No photo gallery is available.")
+
+    @JavascriptInterface
+    fun openVideoLibrary(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, MediaStore.Video.Media.EXTERNAL_CONTENT_URI),
+            "No video library is available.")
+
+    @JavascriptInterface
+    fun openVoiceRecorder(): Boolean =
+        launch(Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION),
+            "No voice recorder application is available.")
+
+    @JavascriptInterface
+    fun openStorageSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS),
+            "Could not open storage settings.")
+
+    @JavascriptInterface
+    fun openPlayStore(): Boolean =
+        launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store")),
+            "No browser is available to open the Play Store website.")
+
+    @JavascriptInterface
+    fun copyToClipboard(text: String?): Boolean {
+        val safeText = text?.take(12000) ?: return false
+        if (safeText.isEmpty()) return false
+        return try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Norah", safeText))
+            Toast.makeText(context, "Text copied to clipboard.", Toast.LENGTH_SHORT).show()
+            true
+        } catch (_: Exception) {
+            Toast.makeText(context, "Could not copy text to clipboard.", Toast.LENGTH_SHORT).show()
+            false
+        }
+    }
+
+    @JavascriptInterface
+    fun openAlarmSettings(): Boolean =
+        launch(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS),
+            "No clock application is available.")
+
+    @JavascriptInterface
+    fun openLanguageSettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_LOCALE_SETTINGS),
+            "Could not open language settings.")
+
+    @JavascriptInterface
+    fun openSecuritySettings(): Boolean =
+        launch(Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS),
+            "Could not open security settings.")
 
 }

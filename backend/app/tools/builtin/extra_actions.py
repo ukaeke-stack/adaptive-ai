@@ -1344,4 +1344,138 @@ def execute_extra(action, step, value):
         except json.JSONDecodeError:return {"status":"failed","message":"Invalid JSON."}
         if not isinstance(obj,dict):return {"status":"failed","message":"JSON root must be an object."}
         return {"status":"succeeded","key_count":len(obj),"value_types":dict(Counter(type(x).__name__ for x in obj.values()))}
+
+    # Previously declared catalogue actions that lacked concrete dispatch branches.
+    if action == "extract_bracketed_text":
+        return {"status": "succeeded", "items": re.findall(r"\\[([^\\[\\]]*)\\]", value)[:MAX_ITEMS]}
+    if action == "extract_quoted_text":
+        items = re.findall(r"""(?:"([^"]*)"|'([^']*)'|“([^”]*)”|‘([^’]*)’)""", value)
+        return {"status": "succeeded", "items": [next((part for part in item if part is not None), "") for item in items][:MAX_ITEMS]}
+    if action == "extract_emojis":
+        pattern = r"[\\U0001F300-\\U0001FAFF\\U00002600-\\U000027BF]"
+        items = re.findall(pattern, value)
+        return {"status": "succeeded", "emojis": list(dict.fromkeys(items))[:MAX_ITEMS], "count": len(items)}
+    if action == "extract_env_variable_names":
+        items = re.findall(r"(?m)^\\s*(?:export\\s+)?([A-Z_][A-Z0-9_]*)\\s*=", value)
+        return {"status": "succeeded", "variables": list(dict.fromkeys(items))[:MAX_ITEMS]}
+    if action == "extract_functions":
+        items = re.findall(r"(?m)^\\s*(?:async\\s+)?function\\s+([A-Za-z_$][\\w$]*)|^\\s*(?:async\\s+)?def\\s+([A-Za-z_]\\w*)|^\\s*(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:async\\s*)?\\(", value)
+        names = [next((part for part in item if part), "") for item in items]
+        return {"status": "succeeded", "functions": list(dict.fromkeys(names))[:MAX_ITEMS], "count": len(names)}
+    if action == "extract_ip_addresses":
+        ipv4 = re.findall(r"(?<![\\d.])(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}(?![\\d.])", value)
+        ipv6 = re.findall(r"(?i)(?<![\\w:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\\w:])", value)
+        items = list(dict.fromkeys(ipv4 + ipv6))
+        return {"status": "succeeded", "addresses": items[:MAX_ITEMS], "count": len(items), "note": "IPv6 results are candidates; full validation is separate."}
+    if action == "extract_list_items":
+        items = re.findall(r"(?m)^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)(.+?)\\s*$", value)
+        return {"status": "succeeded", "items": items[:MAX_ITEMS], "count": len(items)}
+    if action == "extract_markdown_tables":
+        blocks, current = [], []
+        for line in value.splitlines():
+            if "|" in line:
+                current.append(line)
+            elif current:
+                if len(current) >= 2:
+                    blocks.append("\\n".join(current))
+                current = []
+        if len(current) >= 2:
+            blocks.append("\\n".join(current))
+        return {"status": "succeeded", "tables": blocks[:MAX_ITEMS], "count": len(blocks)}
+    if action == "find_email_domains":
+        emails = re.findall(r"[A-Z0-9._%+-]+@([A-Z0-9.-]+\\.[A-Z]{2,})", value, re.I)
+        return {"status": "succeeded", "domains": list(dict.fromkeys(x.lower() for x in emails))[:MAX_ITEMS]}
+    if action == "extract_urls_domains":
+        urls = re.findall(r"https?://[^\\s<>\\\"']+", value, re.I)
+        domains = []
+        for url in urls:
+            try:
+                host = urlparse(url).hostname
+                if host:
+                    domains.append(host.lower())
+            except ValueError:
+                continue
+        return {"status": "succeeded", "urls": list(dict.fromkeys(urls))[:MAX_ITEMS], "domains": list(dict.fromkeys(domains))[:MAX_ITEMS]}
+    if action in {"json_minify", "json_sort_keys"}:
+        try:
+            obj = json.loads(value)
+        except json.JSONDecodeError as exc:
+            return {"status": "failed", "message": f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+        rendered = json.dumps(obj, ensure_ascii=False, separators=(",", ":") if action == "json_minify" else None,
+                              sort_keys=action == "json_sort_keys", indent=None if action == "json_minify" else 2)
+        return {"status": "succeeded", "json": rendered[:MAX_TEXT], "truncated": len(rendered) > MAX_TEXT}
+    if action == "json_to_xml_preview":
+        try:
+            obj = json.loads(value)
+        except json.JSONDecodeError:
+            return {"status": "failed", "message": "Input must be valid JSON."}
+        def xml_name(name):
+            safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(name))
+            return safe if safe and re.match(r"[A-Za-z_]", safe[0]) else "item_" + safe
+        def xml_node(name, node):
+            tag = xml_name(name)
+            if isinstance(node, dict):
+                inner = "".join(xml_node(k, v) for k, v in node.items())
+                return "<" + tag + ">" + inner + "</" + tag + ">"
+            if isinstance(node, list):
+                return "<" + tag + ">" + "".join(xml_node("item", v) for v in node) + "</" + tag + ">"
+            return "<" + tag + ">" + html.escape("" if node is None else str(node)) + "</" + tag + ">"
+        rendered = '<?xml version="1.0" encoding="UTF-8"?>' + xml_node("root", obj)
+        return {"status": "succeeded", "xml_preview": rendered[:MAX_TEXT], "truncated": len(rendered) > MAX_TEXT, "note": "Preview only; XML is generated from JSON values."}
+    if action in {"csv_column_stats", "csv_column_unique", "csv_remove_blank_rows", "csv_validate_shape"}:
+        try:
+            raw_rows = list(csv.reader(io.StringIO(value)))
+        except csv.Error as exc:
+            return {"status": "failed", "message": f"CSV parsing failed: {exc}"}
+        if not raw_rows:
+            return {"status": "failed", "message": "CSV input is empty."}
+        headers = raw_rows[0]
+        data_rows = raw_rows[1:]
+        if action == "csv_validate_shape":
+            widths = [len(row) for row in raw_rows]
+            return {"status": "succeeded", "valid": all(width == len(headers) for width in widths), "expected_columns": len(headers), "row_widths": widths[:MAX_ITEMS]}
+        if action == "csv_remove_blank_rows":
+            kept = [headers] + [row for row in data_rows if any(cell.strip() for cell in row)]
+            out = io.StringIO()
+            csv.writer(out, lineterminator="\\n").writerows(kept)
+            return {"status": "succeeded", "csv": out.getvalue()[:MAX_TEXT], "removed_rows": len(data_rows) - (len(kept) - 1)}
+        column = step.get("column", headers[0] if headers else "")
+        if column not in headers:
+            return {"status": "failed", "message": "Select an existing CSV column."}
+        idx = headers.index(column)
+        values = [row[idx] for row in data_rows if len(row) > idx]
+        if action == "csv_column_unique":
+            unique = list(dict.fromkeys(values))
+            return {"status": "succeeded", "values": unique[:MAX_ITEMS], "unique_count": len(unique)}
+        numeric = []
+        for item in values:
+            try:
+                numeric.append(float(item.replace(",", "")))
+            except (ValueError, AttributeError):
+                continue
+        return {"status": "succeeded", "column": column, "row_count": len(values), "non_empty": sum(bool(x.strip()) for x in values), "unique_count": len(set(values)), "numeric_count": len(numeric), "sum": sum(numeric) if numeric else None, "mean": sum(numeric) / len(numeric) if numeric else None}
+    if action in {"tsv_to_csv", "csv_to_tsv"}:
+        delimiter_in, delimiter_out = ("\\t", ",") if action == "tsv_to_csv" else (",", "\\t")
+        try:
+            rows = list(csv.reader(io.StringIO(value), delimiter=delimiter_in))
+            out = io.StringIO()
+            csv.writer(out, delimiter=delimiter_out, lineterminator="\\n").writerows(rows[:MAX_ITEMS])
+        except csv.Error as exc:
+            return {"status": "failed", "message": f"Delimited text parsing failed: {exc}"}
+        return {"status": "succeeded", "text": out.getvalue()[:MAX_TEXT], "row_count": len(rows)}
+    if action == "markdown_table_to_csv":
+        lines = [line.strip() for line in value.splitlines() if "|" in line]
+        rows = []
+        for line in lines:
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if cells and all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells):
+                continue
+            rows.append(cells)
+        if not rows:
+            return {"status": "failed", "message": "No Markdown table rows found."}
+        width = max(len(row) for row in rows)
+        out = io.StringIO()
+        writer = csv.writer(out, lineterminator="\\n")
+        writer.writerows([row + [""] * (width - len(row)) for row in rows[:MAX_ITEMS]])
+        return {"status": "succeeded", "csv": out.getvalue()[:MAX_TEXT], "row_count": len(rows)}
     return None

@@ -1088,7 +1088,14 @@ def execute_extra(action, step, value):
             d,r=divmod(n,86400);h,r=divmod(r,3600);m,s=divmod(r,60)
             return {"status":"succeeded","days":d,"hours":h,"minutes":m,"seconds":s,"formatted":f"{d}d {h}h {m}m {s}s"}
         if action=="duration_to_seconds":
-            total=sum(int(n)*{"d":86400,"h":3600,"m":60,"s":1}[u] for n,u in re.findall(r"(\d+)\s*(d|h|m|s)",value.lower()))
+            raw=value.strip().lower()
+            if not raw or not re.fullmatch(r"(?:\d+\s*[dhms]\s*)+",raw):
+                return {"status":"failed","message":"Use duration parts such as 1d 2h 3m 4s."}
+            matches=list(re.finditer(r"(\d+)\s*([dhms])",raw))
+            units=[match.group(2) for match in matches]
+            if len(units)!=len(set(units)):
+                return {"status":"failed","message":"Each duration unit may appear only once."}
+            total=sum(int(match.group(1))*{"d":86400,"h":3600,"m":60,"s":1}[match.group(2)] for match in matches)
             return {"status":"succeeded","seconds":total}
         try:dt=datetime.fromisoformat(str(step.get("date",value)).replace("Z","+00:00"))
         except ValueError:return {"status":"failed","message":"Provide ISO date."}

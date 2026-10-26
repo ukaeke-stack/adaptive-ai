@@ -53,7 +53,7 @@ class TaskCreate(BaseModel):
     context: dict[str, str] = Field(default_factory=dict, max_length=10)
 
 
-def _plan(goal: str, context: dict[str, str]) -> list[dict]:
+def _plan_single(goal: str, context: dict[str, str]) -> list[dict]:
     """Create a transparent, bounded plan from intent; unsupported goals stay unexecutable."""
     lower = goal.lower()
     plan: list[dict] = []
@@ -151,6 +151,29 @@ def _plan(goal: str, context: dict[str, str]) -> list[dict]:
                      "reason": "This goal needs an integration or tool that is not enabled in the current safe runtime."})
     return plan
 
+
+
+def _plan(goal: str, context: dict[str, str]) -> list[dict]:
+    """Build a transparent multi-step plan only when every subgoal is supported."""
+    segments = [part.strip() for part in re.split(r"\s+(?:and then|then|and)\s+", goal, flags=re.I) if part.strip()]
+    if len(segments) == 1:
+        return _plan_single(goal, context)
+    if len(segments) > 5:
+        return [{"id": "step-1", "action": "unsupported_goal", "status": "blocked",
+                 "reason": "Multi-step plans are limited to five supported actions. No action was executed."}]
+    combined = []
+    for segment in segments:
+        candidate = _plan_single(segment, context)
+        if not candidate or any(step.get("action") == "unsupported_goal" for step in candidate):
+            return [{"id": "step-1", "action": "unsupported_goal", "status": "blocked",
+                     "reason": "At least one subgoal requires an unavailable integration. No partial plan was created."}]
+        combined.extend(candidate)
+    if len(combined) > 5:
+        return [{"id": "step-1", "action": "unsupported_goal", "status": "blocked",
+                 "reason": "Multi-step plans are limited to five supported actions. No action was executed."}]
+    for index, step in enumerate(combined, start=1):
+        step["id"] = f"step-{index}"
+    return combined
 
 def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
     """Ask the configured model to plan only among the registered safe actions.
@@ -345,7 +368,8 @@ def create_task(body: TaskCreate, request: Request):
     _ensure_table()
     task_id, now = str(uuid4()), _now()
     plan = _plan(body.goal.strip(), body.context)
-    if plan and plan[0].get("action") == "unsupported_goal":
+    has_multiple_subgoals = len([part for part in re.split(r"\s+(?:and then|then|and)\s+", body.goal.strip(), flags=re.I) if part.strip()]) > 1
+    if plan and plan[0].get("action") == "unsupported_goal" and not has_multiple_subgoals:
         plan = _ai_plan(body.goal.strip(), body.context) or plan
     with _ready_engine().begin() as conn:
         conn.execute(text("""INSERT INTO adaptive_agent_tasks

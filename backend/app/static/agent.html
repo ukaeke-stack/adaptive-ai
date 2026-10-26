@@ -184,6 +184,20 @@
 </section>
 
 <section class="panel" style="margin-top:16px">
+  <h3>Signed release and rollback controls</h3>
+  <p class="muted">Owner-only release ledger. Proposals require an Ed25519 signature and configured server keys. This records approval; it does not install code or deploy automatically.</p>
+  <div class="actions"><button id="loadUpdatePolicy" type="button" class="ghost">Load update policy</button><button id="loadReleases" type="button" class="ghost">Refresh releases</button><button id="loadRollbackPlan" type="button" class="ghost">Show rollback plan</button></div>
+  <div class="field"><label for="releaseVersion">Version</label><input id="releaseVersion" maxlength="32" placeholder="v1.0.1"></div>
+  <div class="field"><label for="releaseRevision">Source revision (40-character commit SHA)</label><input id="releaseRevision" maxlength="40"></div>
+  <div class="field"><label for="releaseArtifactHash">Artifact SHA-256 (64 hex characters)</label><input id="releaseArtifactHash" maxlength="64"></div>
+  <div class="field"><label for="releaseSignature">Ed25519 signature (Base64)</label><textarea id="releaseSignature" rows="2" maxlength="512"></textarea></div>
+  <div class="actions"><button id="proposeRelease" type="button">Submit signed release</button></div>
+  <div class="status" id="updateStatus" role="status" aria-live="polite">Update proposals are disabled unless the service administrator enables signed releases.</div>
+  <div id="releaseList" class="task-list"></div>
+  <pre id="updateResult" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#071321;padding:12px;border-radius:10px;max-height:360px;overflow:auto"></pre>
+</section>
+
+<section class="panel" style="margin-top:16px">
   <h3>Multi-step workflows</h3>
   <p class="muted">Compose a sequence of supported local steps. Review the saved workflow, approve it, then run it explicitly. Message steps produce drafts only.</p>
   <div class="field"><label for="workflowName">Workflow name</label><input id="workflowName" maxlength="100" placeholder="Prepare meeting materials"></div>
@@ -575,6 +589,50 @@ $("runPlugin").addEventListener("click",async()=>{
     $("pluginResult").textContent=pretty(result);status.textContent="Built-in plugin capability completed.";
   }catch(e){status.textContent=e.message;status.classList.add("error")}
 });
+async function loadUpdatePolicy(){
+  const status=$("updateStatus");
+  try{const data=await api("/v1/updates/policy");$("updateResult").textContent=pretty(data);status.textContent="Policy loaded: "+(data.enabled?"signed update proposals enabled":"signed update proposals disabled")+"; deployment is external.";status.classList.remove("error")}
+  catch(e){status.textContent=e.message;status.classList.add("error")}
+}
+async function loadReleases(){
+  const status=$("updateStatus"),list=$("releaseList");
+  try{
+    const data=await api("/v1/updates/releases");list.replaceChildren();
+    for(const release of (data.releases||[])){
+      const card=document.createElement("article");card.className="task";
+      const title=document.createElement("h4");title.textContent=release.version+" — "+release.status;
+      const meta=document.createElement("p");meta.className="muted";meta.textContent="Revision: "+release.source_revision+" · Artifact: "+release.artifact_sha256.slice(0,16)+"…";
+      const actions=document.createElement("div");actions.className="task-actions";
+      if(release.status==="pending_approval"){
+        const b=document.createElement("button");b.textContent="Approve (owner)";
+        b.addEventListener("click",async()=>{try{await api("/v1/updates/releases/"+encodeURIComponent(release.id)+"/approve",{method:"POST",body:"{}"});await loadReleases()}catch(e){status.textContent=e.message}});
+        actions.append(b);
+      }
+      if(release.status==="approved"){
+        const b=document.createElement("button");b.className="ghost";b.textContent="Record externally deployed";
+        b.addEventListener("click",async()=>{try{await api("/v1/updates/releases/"+encodeURIComponent(release.id)+"/mark-deployed",{method:"POST",body:"{}"});await loadReleases()}catch(e){status.textContent=e.message}});
+        actions.append(b);
+      }
+      card.append(title,meta,actions);list.append(card);
+    }
+    status.textContent=(data.releases||[]).length+" signed release record(s) loaded.";
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+}
+$("loadUpdatePolicy").addEventListener("click",loadUpdatePolicy);
+$("loadReleases").addEventListener("click",loadReleases);
+$("proposeRelease").addEventListener("click",async()=>{
+  const status=$("updateStatus");
+  try{
+    const body={version:$("releaseVersion").value.trim(),source_revision:$("releaseRevision").value.trim(),artifact_sha256:$("releaseArtifactHash").value.trim(),signature:$("releaseSignature").value.trim()};
+    const result=await api("/v1/updates/proposals",{method:"POST",body:JSON.stringify(body)});
+    $("updateResult").textContent=pretty(result);status.textContent="Signed release verified and submitted for owner approval. No deployment was triggered.";await loadReleases();
+  }catch(e){status.textContent=e.message;status.classList.add("error")}
+});
+$("loadRollbackPlan").addEventListener("click",async()=>{
+  const status=$("updateStatus");
+  try{const result=await api("/v1/updates/rollback-plan",{method:"POST",body:"{}"});$("updateResult").textContent=pretty(result);status.textContent="Rollback target loaded. Deployment must be performed externally.";status.classList.remove("error")}
+  catch(e){status.textContent=e.message;status.classList.add("error")}
+});
 async function loadWorkflows(){
   const status=$("workflowStatus"), list=$("workflowList");
   try{
@@ -661,7 +719,7 @@ $("saveAutomation").addEventListener("click",async()=>{
 $("refreshAutomations").addEventListener("click",loadAutomations);
 $("researchSearch").addEventListener("click",runResearch);
 $("refresh").addEventListener("click",refreshTasks);$("clearForm").addEventListener("click",()=>{["goal","taskText","expression","reminderTitle","dueAt","instructions"].forEach(id=>$(id).value="")});
-(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders();await loadWorkflows();await loadDirectTools();await loadPlugins()})();
+(async()=>{await checkSession();await refreshTasks();await loadAutomations();await loadSocial();await loadNotes();await loadTodos();await loadReminders();await loadWorkflows();await loadDirectTools();await loadPlugins();await loadUpdatePolicy()})();
 </script>
 </body>
 </html>

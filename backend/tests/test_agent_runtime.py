@@ -30,6 +30,11 @@ def test_agent_calculator_rejects_code_execution():
         _calculate("__import__('os').system('echo unsafe')")
 
 
+def test_agent_calculator_rejects_complex_results():
+    with pytest.raises(ValueError):
+        _calculate("(-1) ** 0.5")
+
+
 def test_agent_calculator_limits_exponent():
     with pytest.raises(ValueError):
         _calculate("2 ** 100")

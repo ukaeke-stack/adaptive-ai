@@ -335,4 +335,146 @@ def execute_extra(action, step, value):
         if action=="extract_api_endpoints":
             vals=re.findall(r"(?i)\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+(/[^\s\"'<>]+)",value)
             return {"status":"succeeded","endpoints":[{"method":m.upper(),"path":p} for m,p in vals[:MAX_ITEMS]]}
+
+    if action in {"extract_words","extract_unique_words","word_count_by_paragraph","sentence_count","count_punctuation","count_uppercase","count_digits","strip_accents","transliterate_ascii","mask_digits","mask_emails","mask_phone_numbers","mask_credit_card_candidates","extract_email_domains","extract_urls_with_paths","extract_query_params","url_join_preview","format_json_compact","json_merge_objects","json_array_unique","json_array_length","csv_filter_by_value","csv_rename_header","csv_column_summary","csv_quote_values","csv_to_html_table","html_table_to_csv","extract_markdown_code_languages","extract_markdown_links_and_images","extract_html_headings","extract_html_emails","extract_css_colors","extract_git_hashes","extract_semver_versions","extract_ipv6_candidates","extract_mac_addresses","extract_port_numbers","parse_ini_preview","parse_env_preview","parse_log_timestamps","count_log_levels","extract_error_lines","extract_hex_colors"}:
+        if action=="extract_words":
+            vals=re.findall(r"[\w’'-]+",value,re.UNICODE)
+            return {"status":"succeeded","words":vals[:MAX_ITEMS],"count":len(vals)}
+        if action=="extract_unique_words":
+            vals=list(dict.fromkeys(x.casefold() for x in re.findall(r"[\w’'-]+",value,re.UNICODE)))
+            return {"status":"succeeded","words":vals[:MAX_ITEMS],"count":len(vals)}
+        if action=="word_count_by_paragraph":
+            vals=[p for p in re.split(r"\n\s*\n",value.strip()) if p.strip()]
+            return {"status":"succeeded","paragraphs":[{"index":i,"word_count":len(p.split())} for i,p in enumerate(vals[:MAX_ITEMS],1)],"count":len(vals)}
+        if action=="sentence_count": return {"status":"succeeded","sentence_count":len([x for x in re.split(r"(?<=[.!?])\s+",value.strip()) if x])}
+        if action=="count_punctuation":
+            vals=Counter(ch for ch in value if unicodedata.category(ch).startswith("P"))
+            return {"status":"succeeded","punctuation_count":sum(vals.values()),"counts":dict(vals.most_common(100))}
+        if action=="count_uppercase": return {"status":"succeeded","uppercase_characters":sum(x.isupper() for x in value),"lowercase_characters":sum(x.islower() for x in value)}
+        if action=="count_digits": return {"status":"succeeded","digit_count":sum(x.isdigit() for x in value),"digits":re.findall(r"\d",value)[:MAX_ITEMS]}
+        if action in {"strip_accents","transliterate_ascii"}:
+            result="".join(x for x in unicodedata.normalize("NFKD",value) if not unicodedata.combining(x))
+            if action=="transliterate_ascii": result=result.encode("ascii","ignore").decode("ascii")
+            return {"status":"succeeded","text":result[:MAX_TEXT]}
+        if action=="mask_digits": return {"status":"succeeded","text":re.sub(r"\d","*",value)}
+        if action=="mask_emails": return {"status":"succeeded","text":re.sub(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}","[REDACTED_EMAIL]",value,flags=re.I)}
+        if action=="mask_phone_numbers": return {"status":"succeeded","text":re.sub(r"(?<!\w)\+?\d[\d ().-]{5,}\d(?!\w)","[REDACTED_PHONE]",value)}
+        if action=="mask_credit_card_candidates": return {"status":"succeeded","text":re.sub(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)","[REDACTED_CARD_CANDIDATE]",value),"note":"Pattern-based masking only; no card validity check."}
+        if action=="extract_email_domains":
+            vals=re.findall(r"[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})",value,re.I)
+            return {"status":"succeeded","domains":list(dict.fromkeys(x.lower() for x in vals))[:MAX_ITEMS]}
+        if action in {"extract_urls_with_paths","extract_query_params","url_join_preview"}:
+            if action=="url_join_preview":
+                from urllib.parse import urljoin
+                base=step.get("base_url","");parsed=urlparse(base)
+                if not isinstance(base,str) or parsed.scheme not in {"http","https"} or not parsed.hostname: return {"status":"failed","message":"base_url must be an absolute HTTP/HTTPS URL."}
+                return {"status":"succeeded","url":urljoin(base,value.strip())[:4000],"network_access":False}
+            urls=re.findall(r"https?://[^\s<>\"']+",value,re.I);results=[]
+            from urllib.parse import parse_qs
+            for url in urls:
+                p=urlparse(url)
+                if not p.hostname: continue
+                results.append({"url":url,"host":p.hostname,"path":p.path,"query":parse_qs(p.query) if action=="extract_query_params" else p.query})
+            return {"status":"succeeded","urls":results[:MAX_ITEMS]}
+        if action in {"format_json_compact","json_merge_objects","json_array_unique","json_array_length"}:
+            try: obj=json.loads(value)
+            except json.JSONDecodeError as exc: return {"status":"failed","message":f"Invalid JSON at line {exc.lineno}, column {exc.colno}."}
+            if action=="json_merge_objects":
+                raw=step.get("second_input","")
+                try: second=json.loads(raw) if isinstance(raw,str) else raw
+                except json.JSONDecodeError: return {"status":"failed","message":"second_input must be valid JSON."}
+                if not isinstance(obj,dict) or not isinstance(second,dict): return {"status":"failed","message":"Both JSON values must be objects."}
+                obj={**obj,**second}
+            elif action in {"json_array_unique","json_array_length"}:
+                if not isinstance(obj,list): return {"status":"failed","message":"JSON root must be an array."}
+                if action=="json_array_length": return {"status":"succeeded","length":len(obj)}
+                seen=set();unique=[]
+                for item in obj:
+                    key=json.dumps(item,sort_keys=True,ensure_ascii=False)
+                    if key not in seen: seen.add(key);unique.append(item)
+                obj=unique
+            result=json.dumps(obj,ensure_ascii=False,separators=(",",":") if action=="format_json_compact" else (",",": "))
+            return {"status":"succeeded","json":result[:MAX_TEXT],"truncated":len(result)>MAX_TEXT}
+        if action in {"csv_filter_by_value","csv_rename_header","csv_column_summary","csv_quote_values","csv_to_html_table","html_table_to_csv"}:
+            if action=="html_table_to_csv":
+                table=re.search(r"(?is)<table\b.*?</table\s*>",value)
+                if not table:return {"status":"failed","message":"No HTML table found."}
+                rows=[]
+                for row in re.findall(r"(?is)<tr\b.*?</tr\s*>",table.group(0)):
+                    cells=re.findall(r"(?is)<t[dh]\b[^>]*>(.*?)</t[dh]\s*>",row)
+                    rows.append([re.sub(r"<[^>]*>","",x).strip() for x in cells])
+                out=io.StringIO();csv.writer(out).writerows(rows[:MAX_ITEMS])
+                return {"status":"succeeded","csv":out.getvalue()[:MAX_TEXT],"row_count":len(rows)}
+            try: rows=list(csv.DictReader(io.StringIO(value)))[:5000]
+            except csv.Error as exc:return {"status":"failed","message":str(exc)}
+            if not rows:return {"status":"failed","message":"CSV needs a header and at least one data row."}
+            headers=list(rows[0].keys())
+            if action=="csv_filter_by_value":
+                col=step.get("column");needle=str(step.get("contains","")).casefold()
+                if col not in headers:return {"status":"failed","message":"Column does not exist."}
+                rows=[r for r in rows if needle in str(r.get(col,"")).casefold()]
+            elif action=="csv_rename_header":
+                col,new=step.get("column"),step.get("new_name")
+                if col not in headers or not isinstance(new,str) or not new.strip() or (new in headers and new!=col):return {"status":"failed","message":"Provide an existing column and unique new_name."}
+                headers=[new if x==col else x for x in headers];rows=[{new if k==col else k:v for k,v in r.items()} for r in rows]
+            elif action=="csv_column_summary":
+                col=step.get("column")
+                if col not in headers:return {"status":"failed","message":"Column does not exist."}
+                vals=[str(r.get(col,"") or "") for r in rows]
+                return {"status":"succeeded","column":col,"non_empty":sum(bool(x.strip()) for x in vals),"unique_count":len(set(vals)),"sample_values":list(dict.fromkeys(vals))[:20]}
+            if action=="csv_to_html_table":
+                esc=lambda x:html.escape(str(x or ""))
+                result="<table><thead><tr>"+"".join("<th>"+esc(x)+"</th>" for x in headers)+"</tr></thead><tbody>"+"".join("<tr>"+"".join("<td>"+esc(r.get(x,""))+"</td>" for x in headers)+"</tr>" for r in rows[:200])+"</tbody></table>"
+                return {"status":"succeeded","html":result[:MAX_TEXT],"row_count":len(rows)}
+            out=io.StringIO();writer=csv.DictWriter(out,fieldnames=headers,quoting=csv.QUOTE_ALL if action=="csv_quote_values" else csv.QUOTE_MINIMAL);writer.writeheader();writer.writerows(rows)
+            return {"status":"succeeded","csv":out.getvalue()[:MAX_TEXT],"row_count":len(rows)}
+        if action=="extract_markdown_code_languages":
+            vals=re.findall(r"(?m)^\s*"+chr(96)*3+r"([^\s"+chr(96)+r"]*)",value)
+            return {"status":"succeeded","languages":list(dict.fromkeys(x or "unspecified" for x in vals))[:MAX_ITEMS]}
+        if action=="extract_markdown_links_and_images":
+            links=[{"type":"link","label":a,"url":b} for a,b in re.findall(r"(?<!!)\[([^\]]+)\]\(([^)]+)\)",value)]
+            links.extend({"type":"image","label":a,"url":b} for a,b in re.findall(r"!\[([^\]]*)\]\(([^)]+)\)",value))
+            return {"status":"succeeded","items":links[:MAX_ITEMS],"count":len(links)}
+        if action=="extract_html_headings":
+            vals=[{"level":int(a),"text":re.sub(r"<[^>]*>","",b).strip()} for a,b in re.findall(r"(?is)<h([1-6])\b[^>]*>(.*?)</h[1-6]\s*>",value)]
+            return {"status":"succeeded","headings":vals[:MAX_ITEMS],"count":len(vals)}
+        if action=="extract_html_emails":
+            vals=re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",re.sub(r"<[^>]*>"," ",value),re.I)
+            return {"status":"succeeded","emails":list(dict.fromkeys(vals))[:MAX_ITEMS]}
+        if action in {"extract_css_colors","extract_hex_colors"}:
+            vals=re.findall(r"(?i)#[0-9a-f]{3}(?:[0-9a-f]{3})?\b|rgba?\([^)]*\)|hsla?\([^)]*\)",value)
+            return {"status":"succeeded","colors":list(dict.fromkeys(x.upper() if x.startswith("#") else x for x in vals))[:MAX_ITEMS]}
+        if action=="extract_git_hashes":
+            vals=re.findall(r"(?i)\b(?:[0-9a-f]{40}|[0-9a-f]{64})\b",value)
+            return {"status":"succeeded","hashes":list(dict.fromkeys(vals))[:MAX_ITEMS]}
+        if action=="extract_semver_versions":
+            vals=re.findall(r"(?<![\w])v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?",value)
+            return {"status":"succeeded","versions":list(dict.fromkeys(vals))[:MAX_ITEMS]}
+        if action=="extract_ipv6_candidates":
+            vals=re.findall(r"(?i)(?<![\w:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\w:])",value)
+            return {"status":"succeeded","candidates":list(dict.fromkeys(vals))[:MAX_ITEMS],"note":"Candidates are not fully validated IPv6 addresses."}
+        if action=="extract_mac_addresses":
+            vals=re.findall(r"(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b",value)
+            return {"status":"succeeded","addresses":list(dict.fromkeys(x.upper().replace("-",":") for x in vals))[:MAX_ITEMS]}
+        if action=="extract_port_numbers":
+            vals=[int(x) for x in re.findall(r"(?i)\bport\s*[:=]?\s*(\d{1,5})\b",value) if 1<=int(x)<=65535]
+            return {"status":"succeeded","ports":list(dict.fromkeys(vals))[:MAX_ITEMS]}
+        if action in {"parse_ini_preview","parse_env_preview"}:
+            result={}
+            for line in value.splitlines():
+                line=line.strip()
+                if not line or line.startswith(("#",";")) or (action=="parse_ini_preview" and line.startswith("[")):continue
+                if "=" in line:
+                    k,v=line.split("=",1);k=k.strip()
+                    if k and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]*",k):result[k]=v.strip().strip('"').strip("'")
+            return {"status":"succeeded","values":dict(list(result.items())[:MAX_ITEMS]),"count":len(result),"note":"Preview only; no environment or app settings are changed."}
+        if action=="parse_log_timestamps":
+            vals=re.findall(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b",value)
+            return {"status":"succeeded","timestamps":list(dict.fromkeys(vals))[:MAX_ITEMS]}
+        if action in {"count_log_levels","extract_error_lines"}:
+            if action=="count_log_levels":
+                vals=re.findall(r"(?i)\b(DEBUG|INFO|NOTICE|WARN(?:ING)?|ERROR|CRITICAL|FATAL)\b",value)
+                return {"status":"succeeded","counts":dict(Counter(x.upper() for x in vals)),"total_matches":len(vals)}
+            vals=[x for x in lines if re.search(r"(?i)\b(ERROR|CRITICAL|FATAL|EXCEPTION|TRACEBACK)\b",x)]
+            return {"status":"succeeded","lines":vals[:MAX_ITEMS],"count":len(vals),"truncated":len(vals)>MAX_ITEMS}
     return None

@@ -18,6 +18,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONObject
 
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -163,6 +164,27 @@ class MainActivity : Activity() {
                 if (uri != null) contentResolver.delete(uri, null, null)
                 callback?.onReceiveValue(null)
             }
+            return
+        }
+        if (requestCode == 907) {
+            val selected = if (resultCode == RESULT_OK) data?.data else null
+            var phone = ""
+            if (selected != null) {
+                try {
+                    contentResolver.query(
+                        selected,
+                        arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER),
+                        null, null, null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            phone = cursor.getString(0) ?: ""
+                        }
+                    }
+                } catch (_: Exception) {
+                    phone = ""
+                }
+            }
+            web.evaluateJavascript("window.NorahContactPicked && window.NorahContactPicked(${JSONObject.quote(phone)})", null)
             return
         }
         if (requestCode == 901 && Settings.canDrawOverlays(this)) startRobotService()

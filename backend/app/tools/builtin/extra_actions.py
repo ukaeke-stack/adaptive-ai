@@ -2,7 +2,7 @@
 import csv, difflib, html, io, json, re, statistics, textwrap, unicodedata, uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlparse
 
 MAX_ITEMS = 500
 MAX_TEXT = 120000

@@ -104,8 +104,8 @@ def _ai_plan(goal: str, context: dict[str, str]) -> list[dict] | None:
         '{"steps":[{"action":"count_words|extract_bullets|summarize_text|extract_contacts|extract_dates|draft_message|calculate|create_reminder",'
         '"input":"optional text","expression":"optional arithmetic","title":"optional reminder title",'
         '"due_at":"optional ISO-8601 datetime","notes":"optional reminder notes"}]}. '
-        "Use 1 to 5 steps. Only use these exact action names: count_words, extract_bullets, "
-        "draft_message, calculate, create_reminder. Never invent tools. Never plan sending messages, "
+        "Use 1 to 5 steps. Only use these exact action names: count_words, extract_bullets, summarize_text, "
+        "extract_contacts, extract_dates, draft_message, calculate, create_reminder. Never invent tools. Never plan sending messages, "
         "calls, payments, publishing, arbitrary code, browser control, or device control. "
         "If the goal cannot be completed using the allowed actions, return {\"steps\":[]}."
     )

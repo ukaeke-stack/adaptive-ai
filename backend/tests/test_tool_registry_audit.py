@@ -207,3 +207,32 @@ def test_roman_numeral_parser_requests_input_when_value_is_empty():
 
     result = execute_extended({"action": "roman_to_integer", "input": ""})
     assert result["status"] == "needs_input"
+
+
+def test_financial_helpers_and_json_deep_merge_have_expected_results():
+    from app.tools.builtin.text_tools import execute_extended
+
+    discount = execute_extended({"action": "calculate_discount", "input": "", "amount": 100, "rate": 20})
+    zero_interest = execute_extended({"action": "calculate_loan_payment", "input": "", "amount": 1200, "rate": 0, "months": 12})
+    merged = execute_extended({
+        "action": "json_deep_merge",
+        "input": '{"account":{"name":"Ada","active":true},"items":[1,2]}',
+        "second_input": '{"account":{"active":false},"items":[3]}',
+    })
+
+    assert discount["result"] == 80
+    assert zero_interest["result"] == 100
+    assert merged["status"] == "succeeded"
+    assert merged["json"] == {"account": {"name": "Ada", "active": False}, "items": [3]}
+
+
+def test_csv_unique_column_handles_quoted_delimiters():
+    from app.tools.builtin.text_tools import execute_extended
+
+    result = execute_extended({
+        "action": "csv_column_unique",
+        "input": 'name,city\\nAda,"Lagos, Mainland"\\nTola,Abuja\\nSam,"Lagos, Mainland"',
+        "column": "city",
+    })
+
+    assert result["values"] == ["Lagos, Mainland", "Abuja"]

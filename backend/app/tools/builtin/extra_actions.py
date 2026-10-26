@@ -1330,4 +1330,18 @@ def execute_extra(action, step, value):
             d=int(n//86400);n-=d*86400;h=int(n//3600);n-=h*3600;mi=int(n//60);s=n-mi*60
             result="P"+(str(d)+"D" if d else "")+"T"+(str(h)+"H" if h else "")+(str(mi)+"M" if mi else "")+((str(round(s,3))+"S") if s or not (d or h or mi) else "")
             return {"status":"succeeded","duration":result}
+
+    if action=="extract_xml_doctype":
+        m=re.search(r"(?is)<!DOCTYPE\b.*?(?:\[[\s\S]*?\]\s*)?>",value)
+        return {"status":"succeeded","doctype":m.group(0) if m else None,"found":bool(m)}
+    if action=="extract_css_font_families":
+        vals=[]
+        for item in re.findall(r"(?i)font-family\s*:\s*([^;}]+)",value):
+            vals.extend(x.strip().strip('"').strip("'") for x in item.split(","))
+        return {"status":"succeeded","font_families":list(dict.fromkeys(x for x in vals if x))[:MAX_ITEMS]}
+    if action=="json_object_value_count":
+        try:obj=json.loads(value)
+        except json.JSONDecodeError:return {"status":"failed","message":"Invalid JSON."}
+        if not isinstance(obj,dict):return {"status":"failed","message":"JSON root must be an object."}
+        return {"status":"succeeded","key_count":len(obj),"value_types":dict(Counter(type(x).__name__ for x in obj.values()))}
     return None

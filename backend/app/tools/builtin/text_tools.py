@@ -26,7 +26,9 @@ EXTENDED_ACTIONS = {
     "summarize_csv", "csv_to_markdown", "replace_text", "hash_text",
     "extract_numbers", "extract_hashtags", "extract_mentions",
     "reverse_lines", "trim_lines", "normalize_whitespace", "count_lines",
-    "extract_sentences", "redact_sensitive_data", "strip_html", "compare_texts",\n    "split_text", "base64_encode", "base64_decode", "parse_url",\n    "extract_markdown_links", "generate_checklist", "wrap_text", "convert_units",
+    "extract_sentences", "redact_sensitive_data", "strip_html", "compare_texts",
+    "split_text", "base64_encode", "base64_decode", "parse_url",
+    "extract_markdown_links", "generate_checklist", "wrap_text", "convert_units",
 }
 
 MAX_TEXT = 120_000

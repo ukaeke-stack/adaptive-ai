@@ -25,7 +25,8 @@ EXTENDED_ACTIONS = {
     "extract_urls", "extract_headings", "validate_json", "format_json",
     "summarize_csv", "csv_to_markdown", "replace_text", "hash_text",
     "extract_numbers", "extract_hashtags", "extract_mentions",
-    "reverse_lines", "trim_lines", "normalize_whitespace", "count_lines",\n    "extract_sentences", "redact_sensitive_data", "strip_html", "compare_texts",\n    "split_text", "base64_encode", "base64_decode", "parse_url",\n    "extract_markdown_links", "generate_checklist", "wrap_text", "convert_units",
+    "reverse_lines", "trim_lines", "normalize_whitespace", "count_lines",
+    "extract_sentences", "redact_sensitive_data", "strip_html", "compare_texts",\n    "split_text", "base64_encode", "base64_decode", "parse_url",\n    "extract_markdown_links", "generate_checklist", "wrap_text", "convert_units",
 }
 
 MAX_TEXT = 120_000
@@ -86,18 +87,18 @@ def execute_extended(step: dict) -> dict | None:
                 "non_empty_lines": sum(bool(line.strip()) for line in lines),
                 "blank_lines": sum(not line.strip() for line in lines)}
     if action == "extract_sentences":
-        sentences = [item.strip() for item in re.split(r"(?<=[.!?])\\s+", value.strip()) if item.strip()]
+        sentences = [item.strip() for item in re.split(r"(?<=[.!?])\s+", value.strip()) if item.strip()]
         return {"status": "succeeded", "sentences": sentences[:MAX_ITEMS], "sentence_count": len(sentences)}
     if action == "redact_sensitive_data":
-        redacted = re.sub(r"\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b", "[REDACTED_EMAIL]", value, flags=re.I)
-        redacted = re.sub(r"(?<!\\w)\\+?\\d[\\d ()-]{7,}\\d(?!\\w)", "[REDACTED_PHONE]", redacted)
-        redacted = re.sub(r"\\b(?:\\d[ -]*?){13,19}\\b", "[REDACTED_NUMBER]", redacted)
+        redacted = re.sub(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[REDACTED_EMAIL]", value, flags=re.I)
+        redacted = re.sub(r"(?<!\w)\+?\d[\d ()-]{7,}\d(?!\w)", "[REDACTED_PHONE]", redacted)
+        redacted = re.sub(r"\b(?:\d[ -]*?){13,19}\b", "[REDACTED_NUMBER]", redacted)
         return {"status": "succeeded", "text": redacted, "note": "Pattern-based redaction can miss or over-redact data; review before sharing."}
     if action == "strip_html":
         parser = _HTMLTextExtractor()
         parser.feed(value)
         parser.close()
-        return {"status": "succeeded", "text": re.sub(r"\\s+", " ", " ".join(parser.parts)).strip()[:MAX_TEXT]}
+        return {"status": "succeeded", "text": re.sub(r"\s+", " ", " ".join(parser.parts)).strip()[:MAX_TEXT]}
     if action == "compare_texts":
         other = step.get("second_input", "")
         if not isinstance(other, str) or not other.strip():
@@ -137,11 +138,11 @@ def execute_extended(step: dict) -> dict | None:
                 "path": parsed.path, "query": parse_qs(parsed.query), "fragment": parsed.fragment}
     if action == "extract_markdown_links":
         links = [{"text": label.strip(), "url": url.strip()} for label, url in
-                 re.findall(r"\\[([^\\]]+)\\]\\((https?://[^\\s)]+)\\)", value)]
+                 re.findall(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", value)]
         return {"status": "succeeded", "links": links[:MAX_ITEMS]}
     if action == "generate_checklist":
-        items = [line.strip(" -*\\t") for line in value.splitlines() if line.strip()]
-        return {"status": "succeeded", "markdown": "\\n".join(f"- [ ] {item}" for item in items[:MAX_ITEMS]),
+        items = [line.strip(" -*\t") for line in value.splitlines() if line.strip()]
+        return {"status": "succeeded", "markdown": "\n".join(f"- [ ] {item}" for item in items[:MAX_ITEMS]),
                 "item_count": len(items), "truncated": len(items) > MAX_ITEMS}
     if action == "wrap_text":
         try:
